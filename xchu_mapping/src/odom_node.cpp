@@ -2,7 +2,7 @@
  * @file xchu_mapping.cpp
  * @author XCHU (2022087641@qq.com)
  * @brief  基于ndt的里程计
- *          imu部分暂时不要使用
+ *          imu部分暂时效果不好，不建议打开
  * @version 1.0
  * @date 2020-09-20
  *
@@ -50,7 +50,7 @@ void LidarOdom::ParamInitial() {
   nh.param<bool>("use_imu", _use_imu, false);
   nh.param<bool>("use_odom", _use_odom, false);
   nh.param<bool>("imu_upside_down", _imu_upside_down, false);
-  nh.param<bool>("incremental_voxel_update", _incremental_voxel_update, true);
+  nh.param<bool>("incremental_voxel_update", _incremental_voxel_update, false);
 
   nh.param<int>("ndt_method_type", method_type_temp, 0);
   _method_type = static_cast<MethodType>(method_type_temp);
@@ -93,10 +93,10 @@ void LidarOdom::ParamInitial() {
   tf_b2l = Pose6D2Matrix(tl_pose).cast<float>();
   tf_l2b = tf_b2l.inverse();
 
-  double down_size = 0.5;
-  downSizeFilterKeyFrames.setLeafSize(down_size, down_size, down_size); // 发布全局地图的采样size,设置小了导致系统卡顿
-  downSizeFilterLocalmap.setLeafSize(down_size * 2, down_size * 2, down_size * 2);
-  downSizeFilterGlobalMap.setLeafSize(down_size, down_size, down_size);
+//  double down_size = 0.5;
+  downSizeFilterKeyFrames.setLeafSize(filter_size, filter_size, filter_size); // 发布全局地图的采样size,设置小了导致系统卡顿
+  downSizeFilterLocalmap.setLeafSize(filter_size * 2, filter_size * 2, filter_size * 2);
+  downSizeFilterGlobalMap.setLeafSize(filter_size, filter_size, filter_size);
 
   cloud_keyposes_3d_.reset(new pcl::PointCloud<PointT>());
   scan_ptr.reset(new pcl::PointCloud<pcl::PointXYZI>());
@@ -147,47 +147,12 @@ void LidarOdom::Run() {
       cloud_queue_.pop();
       mutex_lock.unlock();
 
-      // 计算imu的相关信息， 速度以及rpy变化量
-      /*      curr_imu_time = imu_msg->header.stamp;
-            double diff_imu_time = (curr_imu_time - previous_imu_time).toSec();
-
-            double imu_roll, imu_pitch, imu_yaw;
-            tf::Quaternion imu_orientation;
-            tf::quaternionMsgToTF(imu_msg->orientation, imu_orientation);
-            tf::Matrix3x3(imu_orientation).getRPY(imu_roll, imu_pitch, imu_yaw);
-            imu_roll = warpToPmPi(imu_roll);  // 调整,防止超过PI(180°)  --保持在±180°内
-            imu_pitch = warpToPmPi(imu_pitch);
-            imu_yaw = warpToPmPi(imu_yaw);
-
-            double diff_imu_roll = calcDiffForRadian(imu_roll, previous_pose_imu.roll);
-            double diff_imu_pitch = calcDiffForRadian(imu_pitch, previous_pose_imu.pitch);
-            double diff_imu_yaw = calcDiffForRadian(imu_yaw, previous_pose_imu.yaw);
-
-            imu.header = imu_msg->header;
-            imu.linear_acceleration.x = imu_msg->linear_acceleration.x;
-            imu.linear_acceleration.y = imu_msg->linear_acceleration.y;
-            imu.linear_acceleration.z = imu_msg->linear_acceleration.z;
-            //      imu.linear_acceleration.y = 0;
-            //      imu.linear_acceleration.z = 0;
-
-            if (diff_imu_time != 0) {
-              imu.angular_velocity.x = diff_imu_roll / diff_imu_time;
-              imu.angular_velocity.y = diff_imu_pitch / diff_imu_time;
-              imu.angular_velocity.z = diff_imu_yaw / diff_imu_time;
-            } else {
-              imu.angular_velocity.x = 0;
-              imu.angular_velocity.y = 0;
-              imu.angular_velocity.z = 0;
-            }
-            previous_imu_time = curr_imu_time;
-            previous_pose_imu = {0, 0, 0, imu_roll, imu_pitch, imu_yaw};*/
-
       // 1.滑窗localmap
       //      ExtractSurroundKeyframes();
       // 2.基于距离刷新
       //      ExtractSurroundKeyframesByDis();
 
-      OdomEstimate(pointcloud_in, current_scan_time);
+      OdomEstimate(pointcloud_in, current_scan_time, imu_msg);
     }
   } else {
     if (!cloud_queue_.empty()) {
@@ -200,13 +165,13 @@ void LidarOdom::Run() {
       // 匹配
       //       ExtractSurroundKeyframes();
       //      ExtractSurroundKeyframesByDis();
-      OdomEstimate(pointcloud_in, current_scan_time);
+      OdomEstimate(pointcloud_in, current_scan_time, nullptr);
     }
   }
 }
 
 void LidarOdom::OdomEstimate(const pcl::PointCloud<pcl::PointXYZI>::Ptr &filtered_scan_ptr,
-                             const ros::Time &current_scan_time) {
+                             const ros::Time &current_scan_time, const sensor_msgs::ImuConstPtr &imu_msg) {
   ros::Time test_time_1 = ros::Time::now();
   if (filtered_scan_ptr->empty()) {
     ROS_ERROR("check your cloud...");
@@ -244,7 +209,9 @@ void LidarOdom::OdomEstimate(const pcl::PointCloud<pcl::PointXYZI>::Ptr &filtere
     ImuOdomCalc(current_scan_time);
     guess_pose_for_ndt = guess_pose_imu_odom;
   } else if (_use_imu && !_use_odom) {
-    ImuCalc(current_scan_time);
+    // 计算imu的相关信息， 速度以及rpy变化量
+    CaculateAccAndVelo(*imu_msg);
+    //    ImuCalc(current_scan_time);
     //    ImuCalc2(current_scan_time);
     guess_pose_for_ndt = guess_pose_imu;
   } else if (!_use_imu && _use_odom) {
@@ -299,25 +266,23 @@ void LidarOdom::OdomEstimate(const pcl::PointCloud<pcl::PointXYZI>::Ptr &filtere
   this_pose_3d.z = ndt_pose.z;
   this_pose_3d.intensity = cloud_keyposes_3d_->points.size();  // 强度字段表示pose的index
   cloud_keyposes_3d_->points.push_back(this_pose_3d);
-
   cloud_keyframes_.push_back(filtered_scan_ptr);
   cloud_keyposes_.push_back(t_base_link);
 
   // 根据current和previous两帧之间的scantime,以及两帧之间的位置,计算两帧之间的变化
   double secs = (current_scan_time - previous_scan_time).toSec();
-  // Calculate the offset (curren_pos - previous_pos)
   diff_pose = current_pose - previous_pose;
   double diff = sqrt(diff_pose.x * diff_pose.x + diff_pose.y * diff_pose.y + diff_pose.z * diff_pose.z);
 
+  // 用slam的结果修正imu速度
   current_velocity_x = diff_pose.x / secs;
   current_velocity_y = diff_pose.y / secs;
   current_velocity_z = diff_pose.z / secs;
-  current_velocity_imu_x = current_velocity_x;  // 修正imu速度
+  current_velocity_imu_x = current_velocity_x;
   current_velocity_imu_y = current_velocity_y;
   current_velocity_imu_z = current_velocity_z;
 
   // Update position and posture. current_pos -> previous_pos
-  //double shift = sqrt(pow(current_pose.x - previous_pose.x, 2.0) + pow(current_pose.y - previous_pose.y, 2.0));
   shift_dis = sqrt(pow(current_pose.x - previous_pose.x, 2.0) + pow(current_pose.y - previous_pose.y, 2.0));
 
   previous_pose = current_pose_imu = current_pose_odom = current_pose_imu_odom = current_pose;
@@ -326,6 +291,7 @@ void LidarOdom::OdomEstimate(const pcl::PointCloud<pcl::PointXYZI>::Ptr &filtere
   offset_odom_pose = {0, 0, 0, 0, 0, 0};
   offset_imu_odom_pose = {0, 0, 0, 0, 0, 0};
 
+  // 更新localmap
   if (shift_dis >= min_add_scan_shift) {
     localmap_size += shift_dis;
     odom_size += shift_dis;
@@ -685,7 +651,7 @@ void LidarOdom::imuUpSideDown(const sensor_msgs::Imu::Ptr input) {
   input->orientation = tf::createQuaternionMsgFromRollPitchYaw(input_roll, input_pitch, input_yaw);
 }
 
-void LidarOdom::imu_info(const sensor_msgs::Imu &input) {
+void LidarOdom::CaculateAccAndVelo(const sensor_msgs::Imu &input) {
   const ros::Time current_time = input.header.stamp;
   static ros::Time previous_time = current_time;
   const double diff_time = (current_time - previous_time).toSec();
@@ -696,15 +662,18 @@ void LidarOdom::imu_info(const sensor_msgs::Imu &input) {
   tf::quaternionMsgToTF(input.orientation, imu_orientation);
   tf::Matrix3x3(imu_orientation).getRPY(imu_roll, imu_pitch, imu_yaw);
 
+  // imu的角度变化量，因为6轴测量的是相对变化量
   imu_roll = warpToPmPi(imu_roll);  // 调整,防止超过PI(180°)  --保持在±180°内
   imu_pitch = warpToPmPi(imu_pitch);
   imu_yaw = warpToPmPi(imu_yaw);
 
+  // 计算可用的角度offset
   static double previous_imu_roll = imu_roll, previous_imu_pitch = imu_pitch, previous_imu_yaw = imu_yaw;
-  const double diff_imu_roll = calcDiffForRadian(imu_roll, previous_imu_roll);
-  const double diff_imu_pitch = calcDiffForRadian(imu_pitch, previous_imu_pitch);
-  const double diff_imu_yaw = calcDiffForRadian(imu_yaw, previous_imu_yaw);
+  const double diff_imu_roll = calcDiffForRadian(imu_roll, previous_pose_imu.roll);
+  const double diff_imu_pitch = calcDiffForRadian(imu_pitch, previous_pose_imu.pitch);
+  const double diff_imu_yaw = calcDiffForRadian(imu_yaw, previous_pose_imu.yaw);
 
+  // 计算和之前的加速度和角速度
   imu.header = input.header;
   imu.linear_acceleration.x = input.linear_acceleration.x;
   // imu.linear_acceleration.y = input.linear_acceleration.y;
@@ -722,12 +691,49 @@ void LidarOdom::imu_info(const sensor_msgs::Imu &input) {
     imu.angular_velocity.z = 0;
   }
 
-  ImuCalc(input.header.stamp);
+  //ImuCalc(input.header.stamp);
+  current_pose_imu.roll += diff_imu_roll;
+  current_pose_imu.pitch += diff_imu_pitch;
+  current_pose_imu.yaw += diff_imu_yaw;
+
+  // 对imu由于不平衡造成的补偿问题,在这里解决
+  // start1
+  double accX1 = imu.linear_acceleration.x;
+  double accY1 = std::cos(current_pose_imu.roll) * imu.linear_acceleration.y -
+      std::sin(current_pose_imu.roll) * imu.linear_acceleration.z;
+  double accZ1 = std::sin(current_pose_imu.roll) * imu.linear_acceleration.y +
+      std::cos(current_pose_imu.roll) * imu.linear_acceleration.z;
+
+  double accX2 = std::sin(current_pose_imu.pitch) * accZ1 + std::cos(current_pose_imu.pitch) * accX1;
+  double accY2 = accY1;
+  double accZ2 = std::cos(current_pose_imu.pitch) * accZ1 - std::sin(current_pose_imu.pitch) * accX1;
+
+  double accX = std::cos(current_pose_imu.yaw) * accX2 - std::sin(current_pose_imu.yaw) * accY2;
+  double accY = std::sin(current_pose_imu.yaw) * accX2 + std::cos(current_pose_imu.yaw) * accY2;
+  double accZ = accZ2;
+  // end1
+
+  // imu计算xyz方向上的偏移,初始速度用的imu_x为slam计算获得,后面再加上考虑加速度以及时间参数,获得较为准确的距离偏移
+  offset_imu_pose.x += current_velocity_imu_x * diff_time + accX * diff_time * diff_time / 2.0;
+  offset_imu_pose.y += current_velocity_imu_y * diff_time + accY * diff_time * diff_time / 2.0;
+  offset_imu_pose.z += current_velocity_imu_z * diff_time + accZ * diff_time * diff_time / 2.0;
+
+  current_velocity_imu_x += accX * diff_time;  // imu的速度值会通过slam进行修正,以避免累计误差
+  current_velocity_imu_y += accY * diff_time;  // 或者说imu计算时所用的速度并不是用imu得到的,而是用slam得到的
+  current_velocity_imu_z += accZ * diff_time;    // imu所提供的参数,主要用来计算角度上的偏移,以及加速度导致的距离上的偏移!@
+
+  offset_imu_pose.roll += diff_imu_roll;
+  offset_imu_pose.pitch += diff_imu_pitch;
+  offset_imu_pose.yaw += diff_imu_yaw;
+
+  guess_pose_imu = previous_pose + offset_imu_pose;
+  //guess_pose_imu.roll = previous_pose.roll;
+  //guess_pose_imu.pitch = previous_pose.pitch;
 
   previous_time = current_time;
-  previous_imu_roll = imu_roll;
-  previous_imu_pitch = imu_pitch;
-  previous_imu_yaw = imu_yaw;
+  previous_pose_imu.roll = imu_roll;
+  previous_pose_imu.pitch = imu_pitch;
+  previous_pose_imu.yaw = imu_yaw;
 }
 
 void LidarOdom::odom_info(const nav_msgs::Odometry &input) {

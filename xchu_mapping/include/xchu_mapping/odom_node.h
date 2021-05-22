@@ -164,7 +164,9 @@ class LidarOdom {
 
   void Run();
 
-  void OdomEstimate(const pcl::PointCloud<pcl::PointXYZI>::Ptr &input, const ros::Time &current_scan_time);
+  void OdomEstimate(const pcl::PointCloud<pcl::PointXYZI>::Ptr &input,
+                    const ros::Time &current_scan_time,
+                    const sensor_msgs::ImuConstPtr &msg);
 
   void ParamInitial();
 
@@ -186,7 +188,7 @@ class LidarOdom {
 
   void odom_info(const nav_msgs::Odometry &input);
 
-  void imu_info(const sensor_msgs::Imu &input);
+  void CaculateAccAndVelo(const sensor_msgs::Imu &input);
 
   void ExtractSurroundKeyframes();
 

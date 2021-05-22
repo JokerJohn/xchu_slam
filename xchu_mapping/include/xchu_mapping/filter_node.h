@@ -1,6 +1,3 @@
-//
-// Created by xchu on 2021/4/13.
-//
 
 #ifndef SRC_XCHU_MAPPING_SRC_POINTS_FILTER_NODE_H_
 #define SRC_XCHU_MAPPING_SRC_POINTS_FILTER_NODE_H_
@@ -39,46 +36,70 @@
 #include <pcl/filters/statistical_outlier_removal.h>
 
 #include "xchu_mapping/FloorCoeffs.h"
-
-using PointT = pcl::PointXYZI;
+#include "xchu_mapping/common.h"
 
 class CloudFilter {
  public:
   CloudFilter();
 
+  /**
+   * 主函数入口
+   */
   void Run();
 
  private:
-  ros::NodeHandle nh;
-  ros::Publisher points_pub, final_ground_pub, non_points_pub, floor_pub, normal_ground_pub;
-  ros::Subscriber lidar_sub;
-
-  pcl::VoxelGrid<pcl::PointXYZI> downSizeFilterKeyFrames, downSizeGroundFrames, downSizeNoGroundFrames;
-  std::mutex mutex_lock;
-  std::queue<sensor_msgs::PointCloud2ConstPtr> cloud_queue;
+  ros::NodeHandle nh_;
+  ros::Publisher points_pub_, final_ground_pub_, non_points_pub_, floor_pub_, normal_ground_pub_;
+  ros::Subscriber lidar_sub_;
 
   std::string cloud_topic_;
 
+  pcl::VoxelGrid<pcl::PointXYZI> downSizeFilterKeyFrames, downSizeGroundFrames, downSizeNoGroundFrames;
+  std::mutex mutex_lock_;
+  std::queue<sensor_msgs::PointCloud2ConstPtr> cloud_queue;
+
   // plane params
-  double tilt_deg = 0.0;
-  double sensor_height = 2.0;
-  double height_clip_range = 2.5;  //[sensor_height - height_clip_range, sensor_height + height_clip_range]
+  double tilt_deg_ = 0.0;
+  double sensor_height_ = 1.75;
+  double height_clip_range_ = 2.5;  //[sensor_height - height_clip_range, sensor_height + height_clip_range]
+  int floor_pts_thresh_ = 512;
+  double floor_normal_thresh_ = 10.0;
+  bool use_normal_filtering_ = true;
+  double normal_filter_thresh_ = 20.0;
+  bool use_outlier_removal_method_ = true;
 
-  int floor_pts_thresh = 512;
-  double floor_normal_thresh = 10.0;
-  bool use_normal_filtering = true;
-  double normal_filter_thresh = 20.0;
-  bool use_outlier_removal_method = true;
-
+  /**
+   * 点云 callback
+   * @param msg
+   */
   void PcCB(const sensor_msgs::PointCloud2ConstPtr &msg);
 
+  /**
+   * 地面提取：通过法向量过滤以及RANSANC拟合平面
+   * @param cloud
+   * @param current_header
+   * @return
+   */
+  Eigen::Vector4f DetectPlane(const pcl::PointCloud<PointT>::Ptr &cloud, std_msgs::Header &current_header);
+
+  /**
+   * 利用plane cliper去除点云
+   * @param src_cloud
+   * @param plane
+   * @param negative
+   * @return
+   */
   pcl::PointCloud<PointT>::Ptr PlaneClip(const pcl::PointCloud<PointT>::Ptr &src_cloud,
                                          const Eigen::Vector4f &plane,
                                          bool negative);
 
+  /**
+   * 法向量过滤
+   * @param cloud
+   * @return
+   */
   pcl::PointCloud<PointT>::Ptr NormalFiltering(const pcl::PointCloud<PointT>::Ptr &cloud);
 
-  Eigen::Vector4f DetectPlane(const pcl::PointCloud<PointT>::Ptr &cloud, std_msgs::Header &current_header);
 };
 
 #endif //SRC_XCHU_MAPPING_SRC_POINTS_FILTER_NODE_H_

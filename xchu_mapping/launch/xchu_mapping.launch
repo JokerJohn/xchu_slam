@@ -2,6 +2,8 @@
     <param name="use_sim_time" value="true"/>
     <!--注意使用 仿真时间  bag播放时加-clock-->
 
+    <arg name="sensor_height" default="1.75"/><!--雷达的安装高度-->
+
     <!--雷克萨斯小车模型，来自autoware-->
     <include file="$(find vehicle_description)/launch/lexus.launch"/>
 
@@ -10,15 +12,17 @@
     <!--点云过滤节点可用可不用，用的话修改cloud topic即可，注意下采样网格的size默认为0.5，如果是基于边缘和平面点的里程计需要调节其大小-->
     <node pkg="xchu_mapping" type="filter_node" name="filter_node" output="screen">
         <param name="cloud_topic" value="/kitti/velo/pointcloud" type="string"/>
+        <param name="sensor_height" value="$(arg sensor_height)" type="double"/>
     </node>
 
     <node pkg="xchu_mapping" type="odom_node" name="odom_node" output="screen">
+        <param name="sensor_height" value="$(arg sensor_height)" type="double"/>
         <param name="use_imu" value="false" type="bool"/>
-        <param name="ndt_method_type" value="1" type="int"/> <!--pcl:0,cpu:1,gpu:2,omp:3， pcl的有点问题-->
+        <param name="ndt_method_type" value="1" type="int"/> <!--pcl:0,cpu:1,gpu:2,omp:3， pcl的有点问题，gpu的去掉了-->
         <param name="incremental_voxel_update" value="false" type="bool"/>
     </node>
 
-    <!-- 这里要把里程计接入PGO模块，需要修该里程计的topic，点云采用的是filter_node过滤之后的-->
+    <!-- 这里要把里程计接入PGO模块，需要修该里程计的topic，cloud_topic采用的是filter_node过滤之后的-->
     <node pkg="xchu_mapping" type="pgo_node" name="pgo_node" output="screen">
         <param name="save_dir_" value="$(find xchu_mapping)/pcd/"/>
         <param name="loop_method" value="1" type="int"/> <!--1：sc, 2:isc-->

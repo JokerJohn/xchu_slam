@@ -70,7 +70,6 @@ void PGO::InitParams() {
   keyframePoints.reset(new pcl::PointCloud<PointT>());
   kdtreeHistoryKeyPoses.reset(new pcl::KdTreeFLANN<PointT>());
 
-  //float filter_size = 0.5;
   downSizeFilterScancontext.setLeafSize(filter_size, filter_size, filter_size);
   downSizeFilterICP.setLeafSize(filter_size, filter_size, filter_size);
   downSizePublishCloud.setLeafSize(filter_size, filter_size, filter_size);
