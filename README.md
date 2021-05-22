@@ -26,9 +26,9 @@
   
   下图中，蓝色表示因子图中的位姿节点，红色线段表示回环约束边，绿色线段表示里程计相对位姿约束。
   
-  ![image-20210515162904564](/home/xchu/Pictures/image-2.png)
+  ![image-20210515162904564](README/image-2.png)
   
-  ![image-20210515161441905](/home/xchu/Pictures/image-20210515161441905.png)
+  ![image-20210515161441905](README/image-20210515161441905.png)
 
 ## Dependency
 
