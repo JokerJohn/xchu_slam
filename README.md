@@ -4,7 +4,7 @@
 
 ## Introduction
 
-知乎：[](https://zhuanlan.zhihu.com/p/374042868)
+知乎：[轻量级的3D激光SLAM系统，持续更新](https://zhuanlan.zhihu.com/p/374042868)
 
 ![image-20210523175316925](README/image-20210523175316925.png)
 
