@@ -50,7 +50,7 @@ class LidarOdom {
   Pose6D current_pose, current_pose_imu, current_pose_odom, current_pose_imu_odom;
   Pose6D previous_pose_imu, previous_pose_odom, previous_pose_imu_odom; // imu的变化量
   Pose6D diff_pose_imu, diff_pose_odom, diff_pose_imu_odom; // 单个传感器的变化量
-  Pose6D ndt_pose, localizer_pose;
+  Pose6D localizer_pose_, init_pose_;
   // 定义各种差异值(两次采集数据之间的差异,包括点云位置差异,imu差异,odom差异,imu-odom差异)
   Pose6D diff_pose, offset_imu_pose, offset_odom_pose, offset_imu_odom_pose;
 
@@ -64,7 +64,7 @@ class LidarOdom {
 
   // 定义Publisher
   ros::Publisher current_odom_pub, odom_pose_pub, current_points_pub, ndt_stat_pub;  // TODO:这是个啥发布????
-  ros::Subscriber points_sub, imu_sub, odom_sub;
+  ros::Subscriber points_sub, imu_sub, odom_sub, gps_sub;
 
   geometry_msgs::PoseStamped current_pose_msg, guess_pose_msg;
   std_msgs::Bool ndt_stat_msg;  // 确认是否是ndt的第一帧图像 bool类型
@@ -115,6 +115,11 @@ class LidarOdom {
   bool _imu_upside_down = false;  // 用以解决坐标系方向(正负变换)问题 (比如x变更为-x等)
   int method_type_temp = 0;
 
+  bool use_gps_ = true;
+  bool system_initialized_ = false;
+  //ros::Time system_time;
+  std::deque<nav_msgs::Odometry> gps_deque_;
+
   // mutex
   std::mutex mutex_lock;
   std::queue<sensor_msgs::PointCloud2ConstPtr> cloud_queue_;
@@ -122,7 +127,7 @@ class LidarOdom {
   std::queue<nav_msgs::OdometryConstPtr> odom_queue_;
 
   pcl::VoxelGrid<pcl::PointXYZI> downSizeFilterGlobalMap;
-  pcl::VoxelGrid<pcl::PointXYZI> downSizeFilterKeyFrames;
+  pcl::VoxelGrid<pcl::PointXYZI> downSizeFilterKeyframes;
   pcl::VoxelGrid<pcl::PointXYZI> downSizeFilterLocalmap;
 
   pcl::PointCloud<PointT>::Ptr cloud_keyposes_3d_;
@@ -131,14 +136,13 @@ class LidarOdom {
   std::deque<pcl::PointCloud<PointT>::Ptr> recent_keyframes_;
   std::vector<pcl::PointCloud<PointT>::Ptr> cloud_keyframes_;
 
-  pcl::PointCloud<pcl::PointXYZI>::Ptr scan_ptr, pc_target_;
-  pcl::PointCloud<pcl::PointXYZI>::Ptr transformed_scan_ptr;
+  pcl::PointCloud<pcl::PointXYZI>::Ptr scan_ptr_, pc_target_;
+  pcl::PointCloud<pcl::PointXYZI>::Ptr transformed_scan_ptr_;
 
-  Eigen::Matrix4f t_localizer;
-  Eigen::Matrix4f t_base_link;
+  Eigen::Matrix4f t_localizer_, t_base_link_; // 相对pose与全局pose
 
  public:
-  ros::NodeHandle nh;
+  ros::NodeHandle nh_;
 
   LidarOdom();
 
@@ -175,6 +179,10 @@ class LidarOdom {
   void OdomCB(const nav_msgs::OdometryConstPtr &msg);
 
   void PcCB(const sensor_msgs::PointCloud2ConstPtr &msg);
+
+  void GpsCB(const nav_msgs::OdometryConstPtr &msg);
+
+  bool SystemInit(const ros::Time &stamp);
 
   void ImuOdomCalc(ros::Time current_time);
 

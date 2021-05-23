@@ -17,12 +17,14 @@ int main(int argc, char **argv) {
   ROS_INFO("\033[1;32m---->\033[0m XCHU Filter Node Started.");
 
   CloudFilter filter;
-  ros::Rate rate(200);
+  std::thread odom_thread(&CloudFilter::Run, &filter);
+
+ /* ros::Rate rate(200);
   while (ros::ok()) {
     filter.Run();
     ros::spinOnce();
     rate.sleep();
-  }
+  }*/
   ros::spin();
 }
 
@@ -44,86 +46,91 @@ CloudFilter::CloudFilter() : nh_("~") {
 }
 
 void CloudFilter::Run() {
-  if (!cloud_queue.empty()) {
-    //read data 取数据
-    mutex_lock_.lock();
-    pcl::PointCloud<pcl::PointXYZI>::Ptr pointcloud_in(new pcl::PointCloud<pcl::PointXYZI>());
-    pcl::fromROSMsg(*cloud_queue.front(), *pointcloud_in);
-    ros::Time pointcloud_time = (cloud_queue.front())->header.stamp;
-    std_msgs::Header cloud_header = (cloud_queue.front())->header;
-    cloud_queue.pop();
-    mutex_lock_.unlock();
+  while(1){
+    if (!cloud_queue.empty()) {
+      //read data 取数据
+      mutex_lock_.lock();
+      pcl::PointCloud<pcl::PointXYZI>::Ptr pointcloud_in(new pcl::PointCloud<pcl::PointXYZI>());
+      pcl::fromROSMsg(*cloud_queue.front(), *pointcloud_in);
+      ros::Time pointcloud_time = (cloud_queue.front())->header.stamp;
+      std_msgs::Header cloud_header = (cloud_queue.front())->header;
+      cloud_queue.pop();
+      mutex_lock_.unlock();
 
-    if (pointcloud_in->empty()) {
-      ROS_ERROR("Filer Node: cloud is empty !!!");
-      return;
-    }
-    //remove NAN
-    std::vector<int> indices;
-    pcl::removeNaNFromPointCloud(*pointcloud_in, *pointcloud_in, indices);
+      if (pointcloud_in->empty()) {
+        ROS_ERROR("Filer Node: cloud is empty !!!");
+        continue;
+      }
+      //remove NAN，针对速腾雷达
+      std::vector<int> indices;
+      pcl::removeNaNFromPointCloud(*pointcloud_in, *pointcloud_in, indices);
+      // 去除远近的点云
+      double r;
+      pcl::PointCloud<pcl::PointXYZI>::Ptr scan_ptr(new pcl::PointCloud<pcl::PointXYZI>());
+      for (auto point:pointcloud_in->points) {
+        r = std::sqrt(pow(point.x, 2.0) + pow(point.y, 2.0));
+        if (0.5 < r && r < 60) {
+          scan_ptr->points.push_back(point);
+        }
+      }
+      pcl::PointCloud<pcl::PointXYZI>::Ptr filtered_scan_ptr(new pcl::PointCloud<pcl::PointXYZI>());
+      downSizeFilterKeyFrames.setInputCloud(scan_ptr);
+      downSizeFilterKeyFrames.filter(*filtered_scan_ptr);
 
-    // 去除远近的点云
-    double r;
-    pcl::PointCloud<pcl::PointXYZI>::Ptr scan_ptr(new pcl::PointCloud<pcl::PointXYZI>());
-    for (auto point:pointcloud_in->points) {
-      r = std::sqrt(pow(point.x, 2.0) + pow(point.y, 2.0));
-      if (0.5 < r && r < 60) {
-        scan_ptr->points.push_back(point);
+      //  根据分布或者临近距离去除离群点
+      pcl::PointCloud<pcl::PointXYZI>::Ptr sor_scan_ptr(new pcl::PointCloud<pcl::PointXYZI>());
+      if (use_outlier_removal_method_) {
+        int mean_k = 30;
+        double stddev_mul_thresh = 1.0;
+
+        pcl::StatisticalOutlierRemoval<PointT>::Ptr sor(new pcl::StatisticalOutlierRemoval<PointT>());
+        sor->setMeanK(mean_k);
+        sor->setStddevMulThresh(stddev_mul_thresh);
+        sor->setInputCloud(filtered_scan_ptr);
+        sor->filter(*sor_scan_ptr);
+      } else {
+        double radius = 0.8;
+        int min_neighbors = 5;
+
+        pcl::RadiusOutlierRemoval<PointT>::Ptr rad(new pcl::RadiusOutlierRemoval<PointT>());
+        rad->setRadiusSearch(radius);
+        rad->setMinNeighborsInRadius(min_neighbors);
+        rad->setInputCloud(filtered_scan_ptr);
+        rad->filter(*sor_scan_ptr);
+      }
+
+      ros::Time test_time_1 = ros::Time::now();
+      // 提取地面
+      Eigen::Vector4f floor = DetectPlane(sor_scan_ptr, cloud_header);
+      ros::Time test_time_2 = ros::Time::now();
+//    std::cout << "detect plane: " << (test_time_2 - test_time_1) * 1000 << "ms"  << std::endl;
+
+      // publish the detected floor coefficients
+      xchu_mapping::FloorCoeffs coeffs;
+      coeffs.header.stamp = pointcloud_time;
+      coeffs.header.frame_id = "/velo_link";
+      if (floor != Eigen::Vector4f::Identity()) {
+        coeffs.coeffs.resize(4);
+        for (int i = 0; i < 4; i++) {
+          coeffs.coeffs[i] = floor[i];
+        }
+      }
+      floor_pub_.publish(coeffs);
+
+      // 实时的点云也发布
+      if (points_pub_.getNumSubscribers() > 0) {
+        sensor_msgs::PointCloud2::Ptr pointcloud_current_ptr(new sensor_msgs::PointCloud2);
+        pcl::toROSMsg(*sor_scan_ptr, *pointcloud_current_ptr);
+        pointcloud_current_ptr->header.stamp = pointcloud_time;
+        pointcloud_current_ptr->header.frame_id = "/velo_link";
+        points_pub_.publish(*pointcloud_current_ptr);
       }
     }
-    pcl::PointCloud<pcl::PointXYZI>::Ptr filtered_scan_ptr(new pcl::PointCloud<pcl::PointXYZI>());
-    downSizeFilterKeyFrames.setInputCloud(scan_ptr);
-    downSizeFilterKeyFrames.filter(*filtered_scan_ptr);
 
-    //  根据分布或者临近距离去除离群点
-    pcl::PointCloud<pcl::PointXYZI>::Ptr sor_scan_ptr(new pcl::PointCloud<pcl::PointXYZI>());
-    if (use_outlier_removal_method_) {
-      int mean_k = 30;
-      double stddev_mul_thresh = 1.0;
-
-      pcl::StatisticalOutlierRemoval<PointT>::Ptr sor(new pcl::StatisticalOutlierRemoval<PointT>());
-      sor->setMeanK(mean_k);
-      sor->setStddevMulThresh(stddev_mul_thresh);
-      sor->setInputCloud(filtered_scan_ptr);
-      sor->filter(*sor_scan_ptr);
-    } else {
-      double radius = 0.8;
-      int min_neighbors = 5;
-
-      pcl::RadiusOutlierRemoval<PointT>::Ptr rad(new pcl::RadiusOutlierRemoval<PointT>());
-      rad->setRadiusSearch(radius);
-      rad->setMinNeighborsInRadius(min_neighbors);
-      rad->setInputCloud(filtered_scan_ptr);
-      rad->filter(*sor_scan_ptr);
-    }
-
-    ros::Time test_time_1 = ros::Time::now();
-    // 提取地面
-    Eigen::Vector4f floor = DetectPlane(sor_scan_ptr, cloud_header);
-    ros::Time test_time_2 = ros::Time::now();
-    //std::cout << "0-1: " << (test_time_2 - test_time_1) * 1000 << "ms" << "--palane seg" << std::endl;
-
-    // publish the detected floor coefficients
-    xchu_mapping::FloorCoeffs coeffs;
-    coeffs.header.stamp = pointcloud_time;
-    coeffs.header.frame_id = "/velo_link";
-    if (floor != Eigen::Vector4f::Identity()) {
-      coeffs.coeffs.resize(4);
-      for (int i = 0; i < 4; i++) {
-        coeffs.coeffs[i] = floor[i];
-      }
-    }
-    floor_pub_.publish(coeffs);
-
-    // 实时的点云也发布
-    if (points_pub_.getNumSubscribers() > 0) {
-      sensor_msgs::PointCloud2::Ptr pointcloud_current_ptr(new sensor_msgs::PointCloud2);
-      pcl::toROSMsg(*sor_scan_ptr, *pointcloud_current_ptr);
-      pointcloud_current_ptr->header.stamp = pointcloud_time;
-      pointcloud_current_ptr->header.frame_id = "/velo_link";
-      points_pub_.publish(*pointcloud_current_ptr);
-    }
+    std::chrono::milliseconds dura(2);
+    std::this_thread::sleep_for(dura);
   }
+
 }
 
 void CloudFilter::PcCB(const sensor_msgs::PointCloud2ConstPtr &msg) {

@@ -47,6 +47,7 @@
 #include <sensor_msgs/Image.h>
 #include <cv_bridge/cv_bridge.h>
 #include <image_transport/image_transport.h>
+#include <std_srvs/Empty.h>
 
 #include <eigen3/Eigen/Dense>
 
@@ -69,6 +70,7 @@
 #include "scancontext/Scancontext.h"
 #include "xchu_mapping/common.h"
 #include "isc/ISCGeneration.h"
+#include "gps_tools/gpsTools.h"
 
 using namespace gtsam;
 using std::cout;
@@ -88,6 +90,8 @@ class PGO {
 
   void MapVisualization();
 
+  bool SaveMap(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
+
   void SaveMap();
 
  private:
@@ -100,7 +104,7 @@ class PGO {
 
   std::queue<nav_msgs::Odometry::ConstPtr> odom_queue_;
   std::queue<sensor_msgs::PointCloud2ConstPtr> cloud_queue_;
-  std::queue<sensor_msgs::NavSatFix::ConstPtr> gps_queue_;
+  std::queue<nav_msgs::OdometryConstPtr> gps_queue_;
   std::queue<std::pair<int, int> > loop_queue_;
 
   std::mutex mutex_;
@@ -109,7 +113,9 @@ class PGO {
   std::mutex mutex_pose_;
 
   std::string save_dir_;
-  std::string odom_topic_;
+  std::string odom_topic_, cloud_topic_, gps_topic_;
+  ros::ServiceServer srv_save_map_;
+
 
   double time_stamp_ = 0.0;
   bool init_time = false;
@@ -126,6 +132,7 @@ class PGO {
   std::vector<double> keyframeTimes;
   pcl::PointCloud<PointT>::Ptr keyposes_cloud_;
   pcl::PointCloud<PointT>::Ptr keyframePoints;
+  pcl::PointCloud<PointT>::Ptr keyframeGpsPoints;
 
   gtsam::NonlinearFactorGraph gtSAMgraph;
   bool gtSAMgraphMade = false;
@@ -141,6 +148,8 @@ class PGO {
   noiseModel::Base::shared_ptr robustLoopNoise;
   noiseModel::Base::shared_ptr robustGPSNoise;
 
+
+
   // sc loop detection
   SCManager scManager;
   double scDistThres;
@@ -154,44 +163,55 @@ class PGO {
   pcl::VoxelGrid<PointT> downSizeFilterScancontext;
 
   bool laserCloudMapPGORedraw = true;
-
-  bool useGPS = false;
-  sensor_msgs::NavSatFix::ConstPtr curr_gps_;
+  float pose_cov_thre = 0.5;
+  float gps_cov_thre = 0.1;
+  Eigen::MatrixXd pose_covariance_curr;
+  bool useGPS = true;
+  nav_msgs::Odometry::ConstPtr curr_gps_;
   bool hasGPSforThisKF = false;
+  bool useGpsElevation = true;
   bool gpsOffsetInitialized = false;
-  double gpsAltitudeInitOffset = 0.0;
+  bool orientation_ready_ = false;
+  bool init_yaw = false;
+  Eigen::Matrix4d gnss_trans;
+  Eigen::Vector3d gps_pos_pre;
+  Pose6D gps_pose;
+  double yaw = 0.0;
+  gpsTools gps_tools_;
+  double origin_altitude = 0.0, origin_latitude = 0.0, origin_longitude = 0.0;
   double recentOptimizedX = 0.0;
   double recentOptimizedY = 0.0;
+  geometry_msgs::Quaternion yaw_quat_;
 
-  ros::Publisher map_pub, odom_pub, final_odom_pub, pose_pub, markers_pub, isc_pub;
+  ros::Publisher map_pub, odom_pub, final_odom_pub, pose_pub, markers_pub, isc_pub, gps_pose_pub;
   ros::Subscriber points_sub, odom_sub, gps_sub;
 
   void OdomCB(const nav_msgs::Odometry::ConstPtr &_laserOdometry);
 
   void PcCB(const sensor_msgs::PointCloud2ConstPtr &_laserCloudFullRes);
 
-  void GpsCB(const sensor_msgs::NavSatFix::ConstPtr &_gps);
+  void GpsCB(const nav_msgs::OdometryConstPtr &_gps);
 
   void InitParams();
-
-  Pose6D Odom2Pose6D(nav_msgs::Odometry::ConstPtr _odom);
-
-  inline gtsam::Pose3 Pose6D2Pose3(const Pose6D &p) {
-    return gtsam::Pose3(gtsam::Rot3::RzRyRx(p.roll, p.pitch, p.yaw), gtsam::Point3(p.x, p.y, p.z));
-  }
 
   void PublishPoseAndFrame();
 
   void ISAM2Update();
 
-  pcl::PointCloud<PointT>::Ptr TransformCloud2Map(const pcl::PointCloud<PointT>::Ptr &cloudIn, const Pose6D &tf);
-
-  pcl::PointCloud<PointT>::Ptr TransformCloud2Map(pcl::PointCloud<PointT>::Ptr cloudIn, gtsam::Pose3 transformIn);
-
   void LoopFindNearKeyframesCloud(pcl::PointCloud<PointT>::Ptr &nearKeyframes,
                                   const int &key,
                                   const int &submap_size,
                                   const int &root_idx);
+
+  inline gtsam::Pose3 Pose6D2Pose3(const Pose6D &p) {
+    return gtsam::Pose3(gtsam::Rot3::RzRyRx(p.roll, p.pitch, p.yaw), gtsam::Point3(p.x, p.y, p.z));
+  }
+
+  pcl::PointCloud<PointT>::Ptr TransformCloud2Map(const pcl::PointCloud<PointT>::Ptr &cloudIn, const Pose6D &tf);
+
+  pcl::PointCloud<PointT>::Ptr TransformCloud2Map(pcl::PointCloud<PointT>::Ptr cloudIn, gtsam::Pose3 transformIn);
+
+
 
   visualization_msgs::MarkerArray CreateMarker(const ros::Time &stamp);
 
