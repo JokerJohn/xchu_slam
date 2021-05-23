@@ -17,13 +17,12 @@ int main(int argc, char **argv) {
 
   LidarOdom mapping;
   std::thread odom_thread(&LidarOdom::Run, &mapping);
-
-//  ros::Rate rate(200);
-//  while (ros::ok()) {
-//    mapping.Run();
-//    ros::spinOnce();
-//    rate.sleep();
-//  }
+  //  ros::Rate rate(200);
+  //  while (ros::ok()) {
+  //    mapping.Run();
+  //    ros::spinOnce();
+  //    rate.sleep();
+  //  }
   ros::spin();
   return 0;
 }
@@ -118,7 +117,7 @@ void LidarOdom::ParamInitial() {
 void LidarOdom::Run() {
   while (1) {
     if (_use_imu) {
-      if (!cloud_queue_.empty() && !imu_queue_.empty()) {
+      while (!cloud_queue_.empty() && !imu_queue_.empty()) {
         //align time stamp
         mutex_lock.lock();
         double time_diff = cloud_queue_.front()->header.stamp.toSec() - imu_queue_.front()->header.stamp.toSec();
@@ -158,7 +157,7 @@ void LidarOdom::Run() {
         OdomEstimate(pointcloud_in, current_scan_time, imu_msg);
       }
     } else {
-      if (!cloud_queue_.empty()) {
+      while (!cloud_queue_.empty()) {
         mutex_lock.lock();
         pcl::PointCloud<pcl::PointXYZI>::Ptr pointcloud_in(new pcl::PointCloud<pcl::PointXYZI>());
         pcl::fromROSMsg(*cloud_queue_.front(), *pointcloud_in);
@@ -239,7 +238,7 @@ void LidarOdom::OdomEstimate(const pcl::PointCloud<pcl::PointXYZI>::Ptr &filtere
 
   Eigen::Matrix4f init_guess = Pose6D2Matrix(guess_pose_for_ndt).cast<float>();
 
-// 用以保存ndt转换后的点云,align参数
+  // 用以保存ndt转换后的点云,align参数
   pcl::PointCloud<pcl::PointXYZI>::Ptr output_cloud(new pcl::PointCloud<pcl::PointXYZI>);
   if (_method_type == MethodType::use_pcl) {
     pcl_ndt.setInputSource(filtered_scan_ptr);
@@ -332,14 +331,6 @@ void LidarOdom::OdomEstimate(const pcl::PointCloud<pcl::PointXYZI>::Ptr &filtere
     localmap_size = 0.0;
   }
 
-/*  // 发布关键帧位姿
-  if (odom_pose_pub.getNumSubscribers() > 0) {
-    sensor_msgs::PointCloud2 msg;
-    pcl::toROSMsg(*cloud_keyposes_3d_, msg);
-    msg.header.frame_id = "camera_init";
-    msg.header.stamp = ros::Time::now();
-    odom_pose_pub.publish(msg);
-  }*/
   // 实时的点云也发布
   if (current_points_pub.getNumSubscribers() > 0) {
     sensor_msgs::PointCloud2::Ptr pointcloud_current_ptr(new sensor_msgs::PointCloud2);
@@ -477,19 +468,16 @@ void LidarOdom::GpsCB(const nav_msgs::OdometryConstPtr &msg) {
 
 bool LidarOdom::SystemInit(const ros::Time &stamp) {
   // 以点云时间戳为系统时间
-  //system_time = stamp;
-  // 初始化
   if (use_gps_) {
     ROS_WARN(" gps_deque_ size : %f ", gps_deque_.size());
     bool gps_init = false;
     while (!gps_deque_.empty()) {
       mutex_lock.lock();
-      // 时间戳对齐
       double off_time = stamp.toSec() - gps_deque_.front().header.stamp.toSec();
-      if (off_time > 0.5) {        // gnss message too old
+      if (off_time > 0.5) {
         gps_deque_.pop_front();
         mutex_lock.unlock();
-      } else if (off_time < -0.5) {    // gnss message too new
+      } else if (off_time < -0.5) {
         ROS_ERROR("failed to algned gps and lidar time, %f", off_time);
         break;
       } else {
@@ -497,7 +485,6 @@ bool LidarOdom::SystemInit(const ros::Time &stamp) {
         gps_deque_.pop_front();
         mutex_lock.unlock();
         ROS_WARN(" gps lidar off time: %f ", off_time);
-
         init_pose_.x = msg.pose.pose.position.x;
         init_pose_.y = msg.pose.pose.position.y;
         init_pose_.z = msg.pose.pose.position.z;
@@ -531,7 +518,6 @@ bool LidarOdom::SystemInit(const ros::Time &stamp) {
     ROS_WARN("System initialized without gnss...");
     return true;
   }
-
 }
 
 void LidarOdom::ImuOdomCalc(ros::Time current_time) {

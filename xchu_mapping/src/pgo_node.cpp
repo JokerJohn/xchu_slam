@@ -56,10 +56,9 @@ void PGO::InitParams() {
   nh.param<int>("loop_method", loop_method, 1);
   nh.param<bool>("use_gps", useGPS, false);
 
-
-//  std::cout << "topic: " << odom_topic_ << "," << cloud_topic_ << std::endl;
+  //  std::cout << "topic: " << odom_topic_ << "," << cloud_topic_ << std::endl;
   // 每隔2m选取关键帧
-  keyframeMeterGap = 2.0;
+  keyframeMeterGap = 1.5;
 
   // scan contetx的阈值和参数配置
   scDistThres = 0.2;
@@ -145,7 +144,7 @@ void PGO::GpsCB(const nav_msgs::OdometryConstPtr &_gps) {
 void PGO::Run() {
 
   while (1) {
-    if (!cloud_queue_.empty() && !odom_queue_.empty()) {
+    while (!cloud_queue_.empty() && !odom_queue_.empty()) {
       mutex_.lock();
       double time2 = odom_queue_.front()->header.stamp.toSec();
       double time3 = cloud_queue_.front()->header.stamp.toSec();
@@ -179,25 +178,22 @@ void PGO::Run() {
       if (!gps_queue_.empty()) {
         auto time4 = gps_queue_.front()->header.stamp.toSec();
         curr_gps_ = gps_queue_.front();
-        gps_queue_.pop();
         //ROS_WARN("GNSS DIFF:%f", time4 - curr_odom_time_);
-        if (abs(time4 - curr_odom_time_) < 0.1) {
+        if (abs(time4 - curr_odom_time_) < 0.2) {
           //ROS_WARN("use gps");
           hasGPSforThisKF = true;
           gps_pose = GeometryToPose6D(*curr_gps_);
         } else {
           hasGPSforThisKF = false;
         }
+        gps_queue_.pop();
+        hasGPSforThisKF = true;
       }
       cloud_queue_.pop();
       odom_queue_.pop();
       mutex_.unlock();
 
-      odom_pose_prev = odom_pose_curr;
       odom_pose_curr = pose_curr;
-      //    std::cout << "gps: " << gps_pose.x << ", " << gps_pose.y << ", " << gps_pose.z
-      //              << std::endl;
-      //    std::cout << "curr: " << pose_curr.x << ", " << pose_curr.y << ", " << pose_curr.z << std::endl;
 
       // 太近的点云帧舍弃，否则位子图太大，速度慢
       double delta_translation = std::sqrt(std::pow((odom_pose_prev.x - odom_pose_curr.x), 2)
@@ -210,6 +206,8 @@ void PGO::Run() {
       } else {
         isNowKeyFrame = false;
       }
+      odom_pose_prev = odom_pose_curr;
+
       if (!isNowKeyFrame)
         continue;
 
@@ -277,19 +275,14 @@ void PGO::Run() {
                                                             odomNoise));
           if (hasGPSforThisKF) {
             // 里程计位姿协方差较大时候加入
-            // if (pose_covariance_curr(3, 3) < pose_cov_thre && pose_covariance_curr(4, 4) < pose_cov_thre)
-            // hasGPSforThisKF = false;
+            //            if (pose_covariance_curr(3, 3) < pose_cov_thre && pose_covariance_curr(4, 4) < pose_cov_thre)
+            //              hasGPSforThisKF = false;
             // gps噪声过大不适用
             float noise_x = curr_gps_->pose.covariance[0];
             float noise_y = curr_gps_->pose.covariance[7];
             float noise_z = curr_gps_->pose.covariance[14];
             if (noise_x > gps_cov_thre || noise_y > gps_cov_thre)
               hasGPSforThisKF = false;
-//            if (noise_z < 0.1)
-//              useGpsElevation = true;
-//            else
-//              useGpsElevation = false;
-
             recentOptimizedX = gps_pose.x;
             recentOptimizedY = gps_pose.y;
             double curr_altitude_offseted = gps_pose.z;
@@ -303,10 +296,10 @@ void PGO::Run() {
               hasGPSforThisKF = false;
             // 添加GPS因子
             if (hasGPSforThisKF) {
-              std::cout << "pose cov: " << pose_covariance_curr(3, 3) << "," << pose_covariance_curr(4, 4) << ","
-                        << noise_z << std::endl;
-              //std::cout << "pose cov: " << pose_covariance_curr << std::endl;
-              std::cout << "noise: " << noise_x << "," << noise_y << "," << noise_z << std::endl;
+              //              std::cout << "pose cov: " << pose_covariance_curr(3, 3) << "," << pose_covariance_curr(4, 4) << ","
+              //                        << noise_z << std::endl;
+              //              //std::cout << "pose cov: " << pose_covariance_curr << std::endl;
+              //              std::cout << "noise: " << noise_x << "," << noise_y << "," << noise_z << std::endl;
 
               // 保存起来
               PointT gpst;
@@ -333,11 +326,11 @@ void PGO::Run() {
         }
         mutex_pg_.unlock();
 
-        // 100真输出一次node数量
         if (curr_node_idx % 100 == 0)
           cout << "posegraph odom node " << curr_node_idx << " added." << endl;
       }
     }
+
     std::chrono::milliseconds dura(2);
     std::this_thread::sleep_for(dura);
   }
@@ -439,7 +432,7 @@ void PGO::PerformSCLoopClosure() {
 
 void PGO::LoopClosure() {
   ros::Rate rate(2.0);
-  while (ros::ok()) {
+  while (1) {
     rate.sleep();
     PerformSCLoopClosure();
 
@@ -448,13 +441,16 @@ void PGO::LoopClosure() {
       visualization_msgs::MarkerArray markers = CreateMarker(ros::Time::now());
       markers_pub.publish(markers);
     }
+    // wait (must required for running the while loop)
+    std::chrono::milliseconds dura(2);
+    std::this_thread::sleep_for(dura);
   }
 }
 
 void PGO::ICPRefine() {
   //ros::Rate rate(10.0);
   while (1) {
-    if (!loop_queue_.empty()) {
+    while (!loop_queue_.empty()) {
       if (loop_queue_.size() > 30) {
         ROS_WARN("Too many loop clousre candidates to be ICPed is waiting ...");
       }
@@ -554,6 +550,7 @@ void PGO::ISAM2Update() {
   gtSAMgraph.resize(0);
   initialEstimate.clear();
 
+  // 边缘化，获取协方差，但这里pose的协方差肯定不准
   isamCurrentEstimate = isam->calculateEstimate();
   pose_covariance_curr = isam->marginalCovariance(isamCurrentEstimate.size() - 1);
 

@@ -121,23 +121,12 @@ void GNSSOdom::Run() {
     std::chrono::milliseconds dura(2);
     std::this_thread::sleep_for(dura);
   }
-
 }
 
 GNSSOdom::GNSSOdom() : nh_("~") {
   nh_.param("imu_topic", imu_topic);
   nh_.param("gps_topic", gps_topic);
   nh_.param("use_localmap", use_localmap, false);  // 使用点云地图原点, 否则使用车辆运动的起点作为地图原点
-
-/*  std::cout << "origin_longitude : " << origin_longitude << std::endl;
-  std::cout << "origin_latitude : " << origin_latitude << std::endl;
-  std::cout << "origin_altitude : " << origin_altitude << std::endl;
-
-  if (use_localmap) {
-    // 使用已知的原点的话，需要设置初始LLA, 比如基于先验地图的定位
-    gtools.lla_origin_ << origin_latitude, origin_longitude, origin_altitude;
-  }
-  ROS_INFO("Load param success!!");*/
 
   imu_sub_ = nh_.subscribe("/kitti/oxts/imu", 2000, &GNSSOdom::imuCB, this);
   gps_sub_ = nh_.subscribe("/kitti/oxts/gps/fix", 100, &GNSSOdom::GNSSCB, this);

@@ -6,10 +6,12 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
+        - /global_map1
         - /current_points1
         - /lidar_odom1/Shape1
         - /lidar_odom1/Covariance1/Position1
         - /lidar_odom1/Covariance1/Orientation1
+        - /ground_points1
         - /final_Odom1/Shape1
         - /final_Odom1/Covariance1
         - /pose_graph1/Namespaces1
@@ -121,7 +123,7 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 1
-      Size (m): 0.30000001192092896
+      Size (m): 0.20000000298023224
       Style: Flat Squares
       Topic: /global_map
       Unreliable: true
@@ -161,8 +163,8 @@ Visualization Manager:
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 2.496152877807617
-        Min Value: -5.3027024269104
+        Max Value: -15.759078979492188
+        Min Value: -22.119482040405273
         Value: true
       Axis: Z
       Channel Name: intensity
@@ -180,7 +182,7 @@ Visualization Manager:
       Position Transformer: XYZ
       Queue Size: 10
       Selectable: true
-      Size (Pixels): 2
+      Size (Pixels): 3
       Size (m): 0.10000000149011612
       Style: Points
       Topic: /current_points
@@ -328,7 +330,7 @@ Visualization Manager:
       Position Transformer: XYZ
       Queue Size: 10
       Selectable: true
-      Size (Pixels): 2
+      Size (Pixels): 3
       Size (m): 0.009999999776482582
       Style: Points
       Topic: /ground_points
@@ -544,25 +546,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 129.9954376220703
+      Distance: 197.35128784179688
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 3.777153253555298
-        Y: -1.9897897243499756
-        Z: -2.6829092502593994
+        X: -9.062451362609863
+        Y: 11.412789344787598
+        Z: -2.682910203933716
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.5697963237762451
+      Pitch: 1.4597963094711304
       Target Frame: velo_link
       Value: ThirdPersonFollower (rviz)
-      Yaw: 4.250395774841309
+      Yaw: 5.453591346740723
     Saved: ~
 Window Geometry:
   Displays:

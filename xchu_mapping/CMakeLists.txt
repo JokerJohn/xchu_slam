@@ -96,9 +96,9 @@ message("PCL version: ${PCL_VERSION}")
 add_executable(odom_node src/odom_node.cpp)
 target_link_libraries(odom_node ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenMP_LIBS} ${OMP_LIB} ndt_cpu ndt_omp)
 
-add_executable(gnss_node src/gps_odom.cpp include/gps_tools/gpsTools.cpp)
+# 利用gps和imu做一个简单的里程计，主要是坐标对齐
+add_executable(gnss_node src/gps_node.cpp include/gps_tools/gpsTools.cpp)
 target_link_libraries(gnss_node ${catkin_LIBRARIES})
-
 
 #[[ filter部分做了简单的基于法向量的地面分割，直接copy的hdl graph slam，目前待使用]]
 add_executable(filter_node src/filter_node.cpp)

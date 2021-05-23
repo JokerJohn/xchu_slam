@@ -80,18 +80,31 @@ class PGO {
  public:
   PGO();
 
+  /**
+   * 读取gps odom相关信息并加入到因子图中
+   */
   void Run();
 
-  void PerformSCLoopClosure();
-
+  /**
+   * 回环检测线程
+   */
   void LoopClosure();
 
   void ICPRefine();
 
   void MapVisualization();
 
+  /**
+   * ros service保存地图和实验数据
+   * @param req
+   * @param res
+   * @return
+   */
   bool SaveMap(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
 
+  /**
+   * 关闭终端保存地图
+   */
   void SaveMap();
 
  private:
@@ -148,23 +161,20 @@ class PGO {
   noiseModel::Base::shared_ptr robustLoopNoise;
   noiseModel::Base::shared_ptr robustGPSNoise;
 
-
-
-  // sc loop detection
-  SCManager scManager;
-  double scDistThres;
-
-  // isc loop detection
-  ISCGeneration iscGeneration;
-
   pcl::KdTreeFLANN<PointT>::Ptr kdtreeHistoryKeyPoses;
   pcl::PointCloud<PointT>::Ptr laserCloudMapPGO;
   pcl::VoxelGrid<PointT> downSizeFilterMapPGO, downSizeFilterICP, downSizePublishCloud;
   pcl::VoxelGrid<PointT> downSizeFilterScancontext;
 
+  // sc loop detection
+  SCManager scManager;
+  double scDistThres;
+  // isc loop detection
+  ISCGeneration iscGeneration;
+
   bool laserCloudMapPGORedraw = true;
-  float pose_cov_thre = 0.5;
-  float gps_cov_thre = 0.1;
+  float pose_cov_thre = 0.1;
+  float gps_cov_thre = 0.3;
   Eigen::MatrixXd pose_covariance_curr;
   bool useGPS = true;
   nav_msgs::Odometry::ConstPtr curr_gps_;
@@ -196,8 +206,23 @@ class PGO {
 
   void PublishPoseAndFrame();
 
+  /**
+   * 检测潜在的回环帧，装到loop_queue中，在ICPRefine中进一步的确认
+   */
+  void PerformSCLoopClosure();
+
+  /**
+   * 因子图执行优化，并更新key pose
+   */
   void ISAM2Update();
 
+  /**
+   * 寻找当前位置附近的关键帧点云，并拼接成localmap
+   * @param nearKeyframes
+   * @param key
+   * @param submap_size
+   * @param root_idx
+   */
   void LoopFindNearKeyframesCloud(pcl::PointCloud<PointT>::Ptr &nearKeyframes,
                                   const int &key,
                                   const int &submap_size,
@@ -212,7 +237,11 @@ class PGO {
   pcl::PointCloud<PointT>::Ptr TransformCloud2Map(pcl::PointCloud<PointT>::Ptr cloudIn, gtsam::Pose3 transformIn);
 
 
-
+  /**
+   * 位姿图可视化
+   * @param stamp
+   * @return
+   */
   visualization_msgs::MarkerArray CreateMarker(const ros::Time &stamp);
 
 };

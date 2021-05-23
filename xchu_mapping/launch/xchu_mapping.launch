@@ -16,13 +16,14 @@
         <param name="sensor_height" value="$(arg sensor_height)" type="double"/>
     </node>
 
+    <!--gps节点主要是gps的坐标系转换，以起始位置为地图原点，然后odom节点中利用gps进行初始化-->
     <node pkg="xchu_mapping" type="gnss_node" name="gnss_node" output="screen"/>
 
     <node pkg="xchu_mapping" type="odom_node" name="odom_node" output="screen">
         <param name="sensor_height" value="$(arg sensor_height)" type="double"/>
         <param name="use_imu" value="false" type="bool"/>
         <param name="ndt_method_type" value="1" type="int"/> <!--pcl:0,cpu:1,gpu:2,omp:3， pcl的有点问题，gpu的去掉了-->
-        <param name="incremental_voxel_update" value="false" type="bool"/>
+        <param name="incremental_voxel_update" value="true" type="bool"/>
         <param name="use_gps" value="$(arg use_gps)" type="bool"/>
     </node>
 
