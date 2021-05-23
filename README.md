@@ -14,7 +14,7 @@
   1.基于关键帧数量选取, 关键帧数量够则滑窗更新, 去除旧的加入新的
   2.基于距离选取关键帧, 基于localmap距离阈值刷新, 每个周期内localmap关键帧数量从1开始增加
 
-- pgo_node：参考SC-LEGO LOAM，取协方差较小的GPS位置加入因子图中（暂不可用）。
+- pgo_node：参考SC-LEGO LOAM，取协方差较小的GPS位置加入因子图中（暂不可用，dev分支中已开放）。
 
 - 回环检测：三种方法，2中存在误检和漏检情况，3表示一般，对于建图精度未有太大提升，但漏检的情况要少很多。
 
@@ -95,12 +95,6 @@ evo_traj tum  00.txt odom_tum.txt --ref=00.txt -p -a --plot_mode=xyz
 
 
 
-## TODOs
-
-- 雷达惯导紧耦合
-- 更多高效的回环检测方法
-- 离线版本
-
 ### 效果图
 
 下图是优化后的kitti轨迹（version 1.0）
@@ -118,3 +112,4 @@ evo_traj tum  00.txt odom_tum.txt --ref=00.txt -p -a --plot_mode=xyz
 - **LIO SAM**
 - **AUTOWARE**
 - **NDT_OMP**
+- **HDL Graph SLAM**
