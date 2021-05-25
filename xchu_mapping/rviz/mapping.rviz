@@ -7,8 +7,8 @@ Panels:
         - /Global Options1
         - /Status1
         - /smartcar1
-        - /smartcar1/Status1
-        - /lidar_odom1
+        - /global_map1/Status1
+        - /lidar_odom1/Status1
         - /lidar_odom1/Shape1
         - /lidar_odom1/Covariance1/Position1
         - /lidar_odom1/Covariance1/Orientation1
@@ -38,7 +38,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: current_points
+    SyncSource: global_map
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -67,23 +67,18 @@ Visualization Manager:
     - Alpha: 1
       Class: rviz/RobotModel
       Collision Enabled: false
-      Enabled: true
+      Enabled: false
       Links:
         All Links Enabled: true
         Expand Joint Details: false
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
-        velo_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
       Name: smartcar
       Robot Description: robot_description
       TF Prefix: ""
       Update Interval: 0
-      Value: true
+      Value: false
       Visual Enabled: true
     - Class: rviz/TF
       Enabled: false
@@ -162,8 +157,8 @@ Visualization Manager:
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: -1.1258397102355957
-        Min Value: -8.764477729797363
+        Max Value: -3.553378105163574
+        Min Value: -11.252824783325195
         Value: true
       Axis: Z
       Channel Name: intensity
@@ -184,7 +179,7 @@ Visualization Manager:
       Size (Pixels): 3
       Size (m): 0.10000000149011612
       Style: Points
-      Topic: /current_points
+      Topic: /filtered_points
       Unreliable: true
       Use Fixed Frame: true
       Use rainbow: true
@@ -250,7 +245,7 @@ Visualization Manager:
         Shaft Length: 1
         Shaft Radius: 0.20000000298023224
         Value: Arrow
-      Topic: /laser_odom_to_init
+      Topic: /aft_mapped_to_init
       Unreliable: true
       Value: true
     - Class: rviz/Image
@@ -520,7 +515,7 @@ Visualization Manager:
   Global Options:
     Background Color: 48; 48; 48
     Default Light: true
-    Fixed Frame: map
+    Fixed Frame: camera_init
     Frame Rate: 30
   Name: root
   Tools:
@@ -544,25 +539,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 205.0502166748047
+      Distance: 457.6998596191406
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -56.494300842285156
-        Y: 0.31506866216659546
-        Z: -2.6829426288604736
+        X: -31.900226593017578
+        Y: 11.169520378112793
+        Z: 88.91753387451172
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.5697963237762451
-      Target Frame: velo_link
+      Pitch: 1.3197965621948242
+      Target Frame: aft_mapped
       Value: ThirdPersonFollower (rviz)
-      Yaw: 4.2835845947265625
+      Yaw: 4.568577766418457
     Saved: ~
 Window Geometry:
   Displays:

@@ -3,15 +3,15 @@
     <!--注意使用 仿真时间  bag播放时加-clock-->
 
     <arg name="sensor_height" default="1.75"/><!--雷达的安装高度-->
-    <arg name="use_gps" default="true"/>
-    <arg name="lidar_frame_id" default="velo_link"/>
-    <arg name="world_frame_id" default="map"/>
+    <arg name="use_gps" default="false"/>
+    <arg name="lidar_frame_id" default="aft_mapped"/>
+    <arg name="world_frame_id" default="camera_init"/>
 
-    <!--<node pkg="tf" type="static_transform_publisher" name="velodyne"
-          args="0 0 0 0 0 0 /base_link $(arg lidar_frame_id) 100"/>-->
+    <!--雷克萨斯小车模型，来自autoware -->
+    <!--<include file="$(find vehicle_description)/launch/lexus.launch"/>-->
 
-    <!--雷克萨斯小车模型，来自autoware-->
-    <include file="$(find vehicle_description)/launch/lexus.launch"/>
+    <!-- 适配案例aloam-->
+    <include file="$(find aloam_velodyne)/launch/aloam_velodyne_HDL_64.launch"/>
 
     <!--点云过滤节点可用可不用，用的话修改cloud topic即可，注意下采样网格的size默认为0.5，如果是基于边缘和平面点的里程计需要调节其大小-->
     <node pkg="xchu_mapping" type="filter_node" name="filter_node" output="screen">
@@ -19,21 +19,21 @@
         <param name="lidar_frame_id" value="$(arg lidar_frame_id)" type="string"/>
         <param name="sensor_height" value="$(arg sensor_height)" type="double"/>
     </node>
+    <!--
+        &lt;!&ndash;gps节点主要是gps的坐标系转换，以起始位置为地图原点，然后odom节点中利用gps进行初始化&ndash;&gt;
+        <node pkg="xchu_mapping" type="gnss_node" name="gnss_node" output="screen">
+            <param name="world_frame_id" value="$(arg world_frame_id)" type="string"/>
+        </node>
 
-    <!--gps节点主要是gps的坐标系转换，以起始位置为地图原点，然后odom节点中利用gps进行初始化-->
-    <node pkg="xchu_mapping" type="gnss_node" name="gnss_node" output="screen">
-        <param name="world_frame_id" value="$(arg world_frame_id)" type="string"/>
-    </node>
-
-    <node pkg="xchu_mapping" type="odom_node" name="odom_node" output="screen">
-        <param name="sensor_height" value="$(arg sensor_height)" type="double"/>
-        <param name="lidar_frame_id" value="$(arg lidar_frame_id)" type="string"/>
-        <param name="world_frame_id" value="$(arg world_frame_id)" type="string"/>
-        <param name="use_imu" value="false" type="bool"/>
-        <param name="ndt_method_type" value="1" type="int"/> <!--pcl:0,cpu:1,gpu:2,omp:3， pcl的有点问题，gpu的去掉了-->
-        <param name="incremental_voxel_update" value="true" type="bool"/>
-        <param name="use_gps" value="$(arg use_gps)" type="bool"/>
-    </node>
+        <node pkg="xchu_mapping" type="odom_node" name="odom_node" output="screen">
+            <param name="sensor_height" value="$(arg sensor_height)" type="double"/>
+            <param name="lidar_frame_id" value="$(arg lidar_frame_id)" type="string"/>
+            <param name="world_frame_id" value="$(arg world_frame_id)" type="string"/>
+            <param name="use_imu" value="false" type="bool"/>
+            <param name="ndt_method_type" value="1" type="int"/> &lt;!&ndash;pcl:0,cpu:1,gpu:2,omp:3， pcl的有点问题，gpu的去掉了&ndash;&gt;
+            <param name="incremental_voxel_update" value="true" type="bool"/>
+            <param name="use_gps" value="$(arg use_gps)" type="bool"/>
+        </node>-->
 
     <!-- 这里要把里程计接入PGO模块，需要修该里程计的topic，cloud_topic采用的是filter_node过滤之后的-->
     <node pkg="xchu_mapping" type="pgo_node" name="pgo_node" output="screen">
@@ -41,7 +41,7 @@
         <param name="world_frame_id" value="$(arg world_frame_id)" type="string"/>
         <param name="save_dir_" value="$(find xchu_mapping)/pcd/"/>
         <param name="loop_method" value="1" type="int"/> <!--1：sc, 2:isc-->
-        <param name="odom_topic" value="/laser_odom_to_init" type="string"/>
+        <param name="odom_topic" value="/aft_mapped_to_init" type="string"/>
         <param name="cloud_topic" value="/filtered_points" type="string"/>
         <param name="use_gps" value="$(arg use_gps)" type="bool"/>
     </node>
