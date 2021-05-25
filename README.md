@@ -38,7 +38,8 @@
 
 ### 适配ALOAM主要是修改了一些launch文件的内容
 
-1. Run the launch file:
+1. 注释掉aloam_velodyne_HDL_64.launch中的rviz部分。
+3. Run the launch file:
 
 ```shell
 roslaunch xchu_mapping  xchu_mapping.launch 
