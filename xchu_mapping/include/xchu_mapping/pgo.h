@@ -172,6 +172,8 @@ class PGO {
   // isc loop detection
   ISCGeneration iscGeneration;
 
+  std::string lidar_frame_id_, world_frame_id_;
+
   bool laserCloudMapPGORedraw = true;
   float pose_cov_thre = 0.1;
   float gps_cov_thre = 0.3;

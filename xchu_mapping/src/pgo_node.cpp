@@ -55,6 +55,8 @@ void PGO::InitParams() {
   nh.param<std::string>("gps_topic", gps_topic_, "/kitti/oxts/gps/fix");
   nh.param<int>("loop_method", loop_method, 1);
   nh.param<bool>("use_gps", useGPS, false);
+  nh.param<std::string>("lidar_frame_id", lidar_frame_id_, "velo_link");
+  nh.param<std::string>("world_frame_id", world_frame_id_, "map");
 
   //  std::cout << "topic: " << odom_topic_ << "," << cloud_topic_ << std::endl;
   // 每隔2m选取关键帧
@@ -238,7 +240,7 @@ void PGO::Run() {
         iscGeneration.makeAndSavedec(thisKeyFrame, point);
         // 发布isc图像
         cv_bridge::CvImage out_msg;
-        out_msg.header.frame_id = "map";
+        out_msg.header.frame_id = world_frame_id_;
         out_msg.header.stamp = ros::Time().fromSec(curr_odom_time_);
         out_msg.encoding = sensor_msgs::image_encodings::RGB8;
         out_msg.image = iscGeneration.getLastISCRGB();
@@ -985,14 +987,14 @@ void PGO::PublishPoseAndFrame() {
   // key poses
   sensor_msgs::PointCloud2 msg;
   pcl::toROSMsg(*keyframePoints, msg);
-  msg.header.frame_id = "map";
+  msg.header.frame_id = world_frame_id_;
   msg.header.stamp = ros::Time::now();
   pose_pub.publish(msg);
 
   if (useGPS) {
     sensor_msgs::PointCloud2 gps_msg;
     pcl::toROSMsg(*keyframeGpsPoints, gps_msg);
-    gps_msg.header.frame_id = "map";
+    gps_msg.header.frame_id = world_frame_id_;
     gps_msg.header.stamp = ros::Time::now();
     gps_pose_pub.publish(gps_msg);
   }
@@ -1002,7 +1004,7 @@ void PGO::PublishPoseAndFrame() {
   downSizePublishCloud.filter(*laserCloudMapPGO);
   sensor_msgs::PointCloud2 laserCloudMapPGOMsg;
   pcl::toROSMsg(*laserCloudMapPGO, laserCloudMapPGOMsg);
-  laserCloudMapPGOMsg.header.frame_id = "map";
+  laserCloudMapPGOMsg.header.frame_id = world_frame_id_;
   map_pub.publish(laserCloudMapPGOMsg);
 }
 
@@ -1011,7 +1013,7 @@ visualization_msgs::MarkerArray PGO::CreateMarker(const ros::Time &stamp) {
   visualization_msgs::Marker traj_marker, edge_marker, loop_marker;
 
   // node markers
-  traj_marker.header.frame_id = "map";
+  traj_marker.header.frame_id = world_frame_id_;
   traj_marker.header.stamp = stamp;
   traj_marker.ns = "nodes";
   traj_marker.id = 0;
@@ -1026,7 +1028,7 @@ visualization_msgs::MarkerArray PGO::CreateMarker(const ros::Time &stamp) {
   traj_marker.color = color;
 
   // edge markers
-  edge_marker.header.frame_id = "map";
+  edge_marker.header.frame_id = world_frame_id_;
   edge_marker.header.stamp = stamp;
   edge_marker.ns = "edges";
   edge_marker.id = 1;
@@ -1060,7 +1062,7 @@ visualization_msgs::MarkerArray PGO::CreateMarker(const ros::Time &stamp) {
 
   // loop markers
   if (loop_pairs_.size() > 0) {
-    loop_marker.header.frame_id = "map";
+    loop_marker.header.frame_id = world_frame_id_;
     loop_marker.header.stamp = stamp;
     loop_marker.ns = "loop";
     loop_marker.id = 2;

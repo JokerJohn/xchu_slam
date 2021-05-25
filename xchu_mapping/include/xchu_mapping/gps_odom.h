@@ -1,16 +1,12 @@
 /**
 * @Program: Project
-* @Description: [用一句话描述此类]
+* @Description: gps_node
 * @Author: Xiangcheng Hu
 * @Create: 2020/11/26
 * @Copyright: [2020] <Copyright hxc@2022087641@qq.com>
 **/
-
-
 #ifndef SRC_XCHU_SLAM_SRC_GPS_ODOM_H_
 #define SRC_XCHU_SLAM_SRC_GPS_ODOM_H_
-
-
 
 #include <mutex>
 #include <queue>
@@ -39,7 +35,7 @@ class GNSSOdom {
    * IMU callback
    * @param msg
    */
-  void imuCB(const sensor_msgs::ImuConstPtr &msg);
+  void ImuCB(const sensor_msgs::ImuConstPtr &msg);
 
   /**
    * GNSS callback:会将gnss转换为xyz平面坐标
@@ -64,12 +60,16 @@ class GNSSOdom {
     return a_angle_rad;
   }
 
+ public:
+  gpsTools gtools;
+  double origin_latitude = 0.0, origin_longitude = 0.0, origin_altitude = 0.0;
+  Eigen::Vector3d init_pos_;
+  double origin_east = 0.0, origin_north = 0.0, origin_height;
 
   ros::NodeHandle nh_;
   ros::Publisher gps_odom_pub_;
   ros::Subscriber imu_sub_, gps_sub_;
-
-  std::string imu_topic, ins_topic, bestutm_topic, gps_topic;
+  std::string imu_topic, gps_topic, world_frame_id_;
 
   // imu和gps队列
   std::mutex mutex_lock;
@@ -80,12 +80,6 @@ class GNSSOdom {
   bool init_insxyz = false;
   bool init_utm = false;
   bool use_localmap = false;
-
- public:
-  gpsTools gtools;
-  double origin_latitude = 0.0, origin_longitude = 0.0, origin_altitude = 0.0;
-  Eigen::Vector3d init_pos_;
-  double origin_east = 0.0, origin_north = 0.0, origin_height;
 };
 
 #endif //SRC_XCHU_SLAM_SRC_GPS_ODOM_H_

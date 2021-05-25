@@ -52,7 +52,7 @@ class CloudFilter {
   ros::Publisher points_pub_, final_ground_pub_, non_points_pub_, floor_pub_, normal_ground_pub_;
   ros::Subscriber lidar_sub_;
 
-  std::string cloud_topic_;
+  std::string cloud_topic_, lidar_frame_id_;
 
   pcl::VoxelGrid<pcl::PointXYZI> downSizeFilterKeyFrames, downSizeGroundFrames, downSizeNoGroundFrames;
   std::mutex mutex_lock_;

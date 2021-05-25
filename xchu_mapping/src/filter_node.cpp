@@ -30,6 +30,7 @@ int main(int argc, char **argv) {
 
 CloudFilter::CloudFilter() : nh_("~") {
   nh_.param<std::string>("cloud_topic", cloud_topic_, "/kitti/velo/pointcloud");
+  nh_.param<std::string>("lidar_frame_id", lidar_frame_id_, "velo_link");
   nh_.param<double>("sensor_height", sensor_height_, 1.75);
 
   downSizeFilterKeyFrames.setLeafSize(filter_size, filter_size, filter_size); // 发布全局地图的采样size,设置小了耗费时间
@@ -108,7 +109,7 @@ void CloudFilter::Run() {
       // publish the detected floor coefficients
       xchu_mapping::FloorCoeffs coeffs;
       coeffs.header.stamp = pointcloud_time;
-      coeffs.header.frame_id = "/velo_link";
+      coeffs.header.frame_id = lidar_frame_id_;
       if (floor != Eigen::Vector4f::Identity()) {
         coeffs.coeffs.resize(4);
         for (int i = 0; i < 4; i++) {
@@ -122,7 +123,7 @@ void CloudFilter::Run() {
         sensor_msgs::PointCloud2::Ptr pointcloud_current_ptr(new sensor_msgs::PointCloud2);
         pcl::toROSMsg(*sor_scan_ptr, *pointcloud_current_ptr);
         pointcloud_current_ptr->header.stamp = pointcloud_time;
-        pointcloud_current_ptr->header.frame_id = "/velo_link";
+        pointcloud_current_ptr->header.frame_id = lidar_frame_id_;
         points_pub_.publish(*pointcloud_current_ptr);
       }
     }
@@ -223,7 +224,7 @@ Eigen::Vector4f CloudFilter::DetectPlane(const pcl::PointCloud<PointT>::Ptr &clo
 
     sensor_msgs::PointCloud2::Ptr temp_cloud_ptr(new sensor_msgs::PointCloud2);
     pcl::toROSMsg(*output_cloud, *temp_cloud_ptr);
-    temp_cloud_ptr->header.frame_id = "/velo_link";
+    temp_cloud_ptr->header.frame_id = lidar_frame_id_;
     temp_cloud_ptr->header.stamp = current_header.stamp;
     normal_ground_pub_.publish(temp_cloud_ptr);
   }
@@ -275,7 +276,7 @@ Eigen::Vector4f CloudFilter::DetectPlane(const pcl::PointCloud<PointT>::Ptr &clo
     sensor_msgs::PointCloud2::Ptr temp_cloud_ptr(new sensor_msgs::PointCloud2);
     pcl::toROSMsg(*output_cloud, *temp_cloud_ptr);
     temp_cloud_ptr->header.stamp = current_header.stamp;
-    temp_cloud_ptr->header.frame_id = "/velo_link";
+    temp_cloud_ptr->header.frame_id = lidar_frame_id_;
     temp_cloud_ptr->header.stamp = current_header.stamp;
     final_ground_pub_.publish(temp_cloud_ptr);
   }
@@ -296,7 +297,7 @@ Eigen::Vector4f CloudFilter::DetectPlane(const pcl::PointCloud<PointT>::Ptr &clo
     sensor_msgs::PointCloud2::Ptr temp_cloud_ptr(new sensor_msgs::PointCloud2);
     pcl::toROSMsg(*output_cloud, *temp_cloud_ptr);
     temp_cloud_ptr->header.stamp = current_header.stamp;
-    temp_cloud_ptr->header.frame_id = "/velo_link";
+    temp_cloud_ptr->header.frame_id = lidar_frame_id_;
     non_points_pub_.publish(temp_cloud_ptr);
   }
 

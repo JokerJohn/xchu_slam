@@ -6,14 +6,12 @@
 * @Copyright: [2020] <Copyright 2022087641@qq.com>
 **/
 
-
 #include "xchu_mapping/gps_odom.h"
 
 int main(int argc, char **argv) {
-  ros::init(argc, argv, "gps_odom_node");
+  ros::init(argc, argv, "gps_node");
 
   GNSSOdom gps_node;
-
   std::thread gps_thread(&GNSSOdom::Run, &gps_node);
 
 /*  ros::Rate loop_rate(100);
@@ -76,7 +74,7 @@ void GNSSOdom::Run() {
       // pub odom
       nav_msgs::Odometry odom_msg;
       odom_msg.header.stamp = gps_msg->header.stamp;
-      odom_msg.header.frame_id = "map";
+      odom_msg.header.frame_id = world_frame_id_;
       odom_msg.child_frame_id = "gps";
 
       // ----------------- 1. use utm -----------------------
@@ -124,16 +122,17 @@ void GNSSOdom::Run() {
 }
 
 GNSSOdom::GNSSOdom() : nh_("~") {
-  nh_.param("imu_topic", imu_topic);
-  nh_.param("gps_topic", gps_topic);
+  nh_.param<std::string>("imu_topic", imu_topic, "/kitti/oxts/imu");
+  nh_.param<std::string>("gps_topic", gps_topic, "/kitti/oxts/gps/fix");
+  nh_.param<std::string>("world_frame_id", world_frame_id_, "map");
   nh_.param("use_localmap", use_localmap, false);  // 使用点云地图原点, 否则使用车辆运动的起点作为地图原点
 
-  imu_sub_ = nh_.subscribe("/kitti/oxts/imu", 2000, &GNSSOdom::imuCB, this);
-  gps_sub_ = nh_.subscribe("/kitti/oxts/gps/fix", 100, &GNSSOdom::GNSSCB, this);
+  imu_sub_ = nh_.subscribe(imu_topic, 2000, &GNSSOdom::ImuCB, this);
+  gps_sub_ = nh_.subscribe(gps_topic, 100, &GNSSOdom::GNSSCB, this);
   gps_odom_pub_ = nh_.advertise<nav_msgs::Odometry>("/gps_odom", 4, false);
 }
 
-void GNSSOdom::imuCB(const sensor_msgs::ImuConstPtr &msg) {
+void GNSSOdom::ImuCB(const sensor_msgs::ImuConstPtr &msg) {
   mutex_lock.lock();
   imuBuf.push_back(msg);
   mutex_lock.unlock();

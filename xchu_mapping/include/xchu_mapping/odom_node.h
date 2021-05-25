@@ -107,6 +107,7 @@ class LidarOdom {
   int method_type_temp = 0;
   bool use_gps_ = true;
   bool system_initialized_ = false;
+  std::string lidar_frame_id_, world_frame_id_;
 
   std::mutex mutex_lock;
   std::queue<sensor_msgs::PointCloud2ConstPtr> cloud_queue_;

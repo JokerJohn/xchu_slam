@@ -32,14 +32,13 @@ LidarOdom::LidarOdom() : nh_("~") {
   ParamInitial();
 
   current_points_pub = nh_.advertise<sensor_msgs::PointCloud2>("/current_points", 10);
-  //odom_pose_pub = nh_.advertise<sensor_msgs::PointCloud2>("/odom_poses", 10);
   current_odom_pub = nh_.advertise<nav_msgs::Odometry>("/laser_odom_to_init", 100);
 
   points_sub = nh_.subscribe("/filtered_points", 10, &LidarOdom::PcCB, this);
   odom_sub = nh_.subscribe("/odom_raw", 50, &LidarOdom::OdomCB, this);// 编码器
   imu_sub = nh_.subscribe("/kitti/oxts/imu", 500, &LidarOdom::ImuCB, this);
   if (use_gps_) {
-    gps_sub = nh_.subscribe<nav_msgs::Odometry>("/gps_odom", 200, &LidarOdom::GpsCB, this);
+    gps_sub = nh_.subscribe<nav_msgs::Odometry>("/gps_odom", 20, &LidarOdom::GpsCB, this);
   }
 }
 
@@ -57,6 +56,8 @@ void LidarOdom::ParamInitial() {
   nh_.param<bool>("incremental_voxel_update", _incremental_voxel_update, false);
   nh_.param<bool>("use_gps", use_gps_, false);
   nh_.param<int>("ndt_method_type", method_type_temp, 0);
+  nh_.param<std::string>("lidar_frame_id", lidar_frame_id_, "velo_link");
+  nh_.param<std::string>("world_frame_id", world_frame_id_, "map");
 
   _method_type = static_cast<MethodType>(method_type_temp);
   if (_method_type == MethodType::use_pcl) {
@@ -335,7 +336,7 @@ void LidarOdom::OdomEstimate(const pcl::PointCloud<pcl::PointXYZI>::Ptr &filtere
   if (current_points_pub.getNumSubscribers() > 0) {
     sensor_msgs::PointCloud2::Ptr pointcloud_current_ptr(new sensor_msgs::PointCloud2);
     pcl::toROSMsg(*transformed_scan_ptr_, *pointcloud_current_ptr);
-    pointcloud_current_ptr->header.frame_id = "map";
+    pointcloud_current_ptr->header.frame_id = world_frame_id_;
     pointcloud_current_ptr->header.stamp = current_scan_time;
     current_points_pub.publish(*pointcloud_current_ptr);
   }
@@ -346,7 +347,7 @@ void LidarOdom::OdomEstimate(const pcl::PointCloud<pcl::PointXYZI>::Ptr &filtere
 
     nav_msgs::Odometry odom;
     odom.header.stamp = current_scan_time;
-    odom.header.frame_id = "map";
+    odom.header.frame_id = world_frame_id_;
 
     odom.pose.pose.position.x = t_base_link_(0, 3);
     odom.pose.pose.position.y = t_base_link_(1, 3);
@@ -357,7 +358,7 @@ void LidarOdom::OdomEstimate(const pcl::PointCloud<pcl::PointXYZI>::Ptr &filtere
     odom.pose.pose.orientation.z = tmp_q.z();
     odom.pose.pose.orientation.w = tmp_q.w();
 
-    odom.child_frame_id = "velo_link";
+    odom.child_frame_id = lidar_frame_id_;
     odom.twist.twist.linear.x = current_velocity_x;
     odom.twist.twist.linear.y = current_velocity_y;
     odom.twist.twist.linear.z = current_velocity_z;
@@ -375,7 +376,7 @@ void LidarOdom::OdomEstimate(const pcl::PointCloud<pcl::PointXYZI>::Ptr &filtere
     q.setY(tmp_q.y());
     q.setZ(tmp_q.z());
     transform.setRotation(q);
-    br.sendTransform(tf::StampedTransform(transform, current_scan_time, "map", "velo_link"));
+    br.sendTransform(tf::StampedTransform(transform, current_scan_time, world_frame_id_, lidar_frame_id_));
   }
 
   /* std::cout << "*************************************************************************" << std::endl;
