@@ -19,13 +19,14 @@ int main(int argc, char **argv) {
   CloudFilter filter;
   std::thread odom_thread(&CloudFilter::Run, &filter);
 
- /* ros::Rate rate(200);
-  while (ros::ok()) {
-    filter.Run();
-    ros::spinOnce();
-    rate.sleep();
-  }*/
+  /* ros::Rate rate(200);
+   while (ros::ok()) {
+     filter.Run();
+     ros::spinOnce();
+     rate.sleep();
+   }*/
   ros::spin();
+  return 0;
 }
 
 CloudFilter::CloudFilter() : nh_("~") {
@@ -47,8 +48,8 @@ CloudFilter::CloudFilter() : nh_("~") {
 }
 
 void CloudFilter::Run() {
-  while(1){
-    if (!cloud_queue.empty()) {
+  while (1) {
+    while (!cloud_queue.empty()) {
       //read data 取数据
       mutex_lock_.lock();
       pcl::PointCloud<pcl::PointXYZI>::Ptr pointcloud_in(new pcl::PointCloud<pcl::PointXYZI>());
@@ -104,7 +105,7 @@ void CloudFilter::Run() {
       // 提取地面
       Eigen::Vector4f floor = DetectPlane(sor_scan_ptr, cloud_header);
       ros::Time test_time_2 = ros::Time::now();
-//    std::cout << "detect plane: " << (test_time_2 - test_time_1) * 1000 << "ms"  << std::endl;
+      //    std::cout << "detect plane: " << (test_time_2 - test_time_1) * 1000 << "ms"  << std::endl;
 
       // publish the detected floor coefficients
       xchu_mapping::FloorCoeffs coeffs;
@@ -131,7 +132,6 @@ void CloudFilter::Run() {
     std::chrono::milliseconds dura(2);
     std::this_thread::sleep_for(dura);
   }
-
 }
 
 void CloudFilter::PcCB(const sensor_msgs::PointCloud2ConstPtr &msg) {

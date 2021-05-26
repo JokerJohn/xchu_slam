@@ -18,6 +18,8 @@ inline double deg2rad(double degrees) {
 
 extern double filter_size = 0.5;
 
+
+
 struct Pose6D {
   double x;
   double y;

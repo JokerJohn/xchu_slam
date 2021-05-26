@@ -40,6 +40,7 @@ PGO::PGO() : nh("~") {
   }
   srv_save_map_ = nh.advertiseService("/save_map", &PGO::SaveMap, this);
 
+  final_odom_pub = nh.advertise<nav_msgs::Odometry>("/laser_odom_after_pgo", 100);
   gps_pose_pub = nh.advertise<sensor_msgs::PointCloud2>("/gps_poses", 10);
   map_pub = nh.advertise<sensor_msgs::PointCloud2>("/global_map", 100);
   pose_pub = nh.advertise<sensor_msgs::PointCloud2>("/key_poses", 10);  // key pose
@@ -189,7 +190,6 @@ void PGO::Run() {
           hasGPSforThisKF = false;
         }
         gps_queue_.pop();
-        hasGPSforThisKF = true;
       }
       cloud_queue_.pop();
       odom_queue_.pop();
@@ -218,7 +218,7 @@ void PGO::Run() {
       keyframeLaserClouds.push_back(thisKeyFrame);
       keyframePoses.push_back(pose_curr);
       originPoses.push_back(pose_curr);
-      keyframePosesUpdated.push_back(pose_curr); // init
+      keyframePosesUpdated.push_back(pose_curr);
       keyframeTimes.push_back(curr_odom_time_);
 
       pcl::PointXYZI point;
@@ -264,7 +264,7 @@ void PGO::Run() {
       } else {
         const int prev_node_idx = keyframePoses.size() - 2;
         const int curr_node_idx = keyframePoses.size() - 1;
-        // becuase cpp starts with 0 (actually this index could be any number, but for simple implementation, we follow sequential indexing)
+
         gtsam::Pose3 poseFrom = Pose6D2Pose3(keyframePoses.at(prev_node_idx));
         gtsam::Pose3 poseTo = Pose6D2Pose3(keyframePoses.at(curr_node_idx));
 
@@ -275,6 +275,7 @@ void PGO::Run() {
                                                             curr_node_idx,
                                                             poseFrom.between(poseTo),
                                                             odomNoise));
+          // ROS_WARN("odom factor added at node %d ", curr_node_idx);
           if (hasGPSforThisKF) {
             // 里程计位姿协方差较大时候加入
             //            if (pose_covariance_curr(3, 3) < pose_cov_thre && pose_covariance_curr(4, 4) < pose_cov_thre)
@@ -296,7 +297,7 @@ void PGO::Run() {
             // GPS not properly initialized (0,0,0)
             if (abs(recentOptimizedX) < 1e-6 && abs(recentOptimizedY) < 1e-6)
               hasGPSforThisKF = false;
-            // 添加GPS因子
+            // 添加GPS因子时候必须先吧经纬高坐标转换到当前世界坐标系下
             if (hasGPSforThisKF) {
               //              std::cout << "pose cov: " << pose_covariance_curr(3, 3) << "," << pose_covariance_curr(4, 4) << ","
               //                        << noise_z << std::endl;
@@ -332,7 +333,6 @@ void PGO::Run() {
           cout << "posegraph odom node " << curr_node_idx << " added." << endl;
       }
     }
-
     std::chrono::milliseconds dura(2);
     std::this_thread::sleep_for(dura);
   }
@@ -428,7 +428,6 @@ void PGO::PerformSCLoopClosure() {
         mutex_.unlock();
       }
     }
-
   }
 }
 
@@ -532,10 +531,11 @@ void PGO::ICPRefine() {
 
 void PGO::MapVisualization() {
   ros::Rate rate(0.1);
-  while (ros::ok()) {
-    rate.sleep();
-    if (keyframeLaserClouds.size() > 1 && keyframePosesUpdated.size() > 1)
+  while (1) {
+    while (keyframeLaserClouds.size() > 1 && keyframePosesUpdated.size() > 1) {
+      rate.sleep();
       PublishPoseAndFrame();
+    }
   }
   // 关闭终端是保存地图
   ROS_WARN("SAVE MAP AND G2O..");
@@ -789,7 +789,7 @@ bool PGO::SaveMap(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
 
   // 同事保存g2o文件
   gtsam::writeG2o(gtSAMgraph, isamCurrentEstimate, file_path + "pose_graph.g2o");
-  ROS_WARN("Save map. pose size: %d, cloud size: %d", poses->points.size(), num_points);
+  ROS_WARN("Save map. pose size: %d", poses->points.size());
 
   return true;
 }
@@ -927,7 +927,7 @@ void PGO::SaveMap() {
 
   // 同事保存g2o文件
   gtsam::writeG2o(gtSAMgraph, isamCurrentEstimate, file_path + "pose_graph.g2o");
-  ROS_WARN("Save map. pose size: %d, cloud size: %d", poses->points.size(), num_points);
+  ROS_WARN("Save map. pose size: %d", poses->points.size());
 }
 
 void PGO::PublishPoseAndFrame() {
@@ -946,11 +946,10 @@ void PGO::PublishPoseAndFrame() {
   {
     const Pose6D &pose_est = keyframePosesUpdated.at(node_idx); // upodated poses
 
-/*
-    // publish odom
+/*    // publish odom
     nav_msgs::Odometry odomAftPGOthis;
-    odomAftPGOthis.header.frame_id = "map";
-    odomAftPGOthis.child_frame_id = "after_optimized";
+    odomAftPGOthis.header.frame_id = world_frame_id_;
+    odomAftPGOthis.child_frame_id = lidar_frame_id_;
     odomAftPGOthis.header.stamp = ros::Time().fromSec(keyframeTimes[node_idx]);
     odomAftPGOthis.pose.pose.position.x = keyframePosesUpdated.front().x;
     odomAftPGOthis.pose.pose.position.y = keyframePosesUpdated.front().y;
@@ -974,8 +973,7 @@ void PGO::PublishPoseAndFrame() {
     q.setY(odomAftPGOthis.pose.pose.orientation.y);
     q.setZ(odomAftPGOthis.pose.pose.orientation.z);
     transform.setRotation(q);
-    br.sendTransform(tf::StampedTransform(transform, odomAftPGOthis.header.stamp, "map", "after_optimized"));
-*/
+    br.sendTransform(tf::StampedTransform(transform, odomAftPGOthis.header.stamp, world_frame_id_, lidar_frame_id_));*/
 
     if (counter % SKIP_FRAMES == 0) {
       *laserCloudMapPGO += *TransformCloud2Map(keyframeLaserClouds[node_idx], keyframePosesUpdated[node_idx]);

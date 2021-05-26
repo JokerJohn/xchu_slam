@@ -43,7 +43,7 @@ LidarOdom::LidarOdom() : nh_("~") {
 }
 
 void LidarOdom::ParamInitial() {
-  nh_.param<float>("ndt_resolution", ndt_res, 2.0);
+  nh_.param<float>("ndt_resolution", ndt_res, 1.0);
   nh_.param<double>("ndt_step_size", step_size, 0.1);
   nh_.param<double>("ndt_trans_eps", trans_eps, 0.01);
   nh_.param<int>("ndt_max_iter", max_iter, 30);

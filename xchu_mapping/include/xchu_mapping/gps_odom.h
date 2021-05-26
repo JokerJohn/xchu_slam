@@ -65,6 +65,10 @@ class GNSSOdom {
   double origin_latitude = 0.0, origin_longitude = 0.0, origin_altitude = 0.0;
   Eigen::Vector3d init_pos_;
   double origin_east = 0.0, origin_north = 0.0, origin_height;
+// imu到lidar的转换
+  Eigen::Matrix4d T_imu2velo = Eigen::Matrix4d::Identity();
+  Eigen::Vector3d pos;
+  Eigen::Matrix3d rot;
 
   ros::NodeHandle nh_;
   ros::Publisher gps_odom_pub_;
