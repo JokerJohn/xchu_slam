@@ -40,7 +40,6 @@
 enum class MethodType {
   use_pcl = 0,
   use_cpu = 1,
-  use_gpu = 2,
   use_omp = 3,
 };
 
@@ -50,21 +49,19 @@ class LidarOdom {
   Pose6D current_pose, current_pose_imu, current_pose_odom, current_pose_imu_odom;
   Pose6D previous_pose_imu, previous_pose_odom, previous_pose_imu_odom; // imu的变化量
   Pose6D diff_pose_imu, diff_pose_odom, diff_pose_imu_odom; // 单个传感器的变化量
-  Pose6D ndt_pose, localizer_pose;
-  // 定义各种差异值(两次采集数据之间的差异,包括点云位置差异,imu差异,odom差异,imu-odom差异)
-  Pose6D diff_pose, offset_imu_pose, offset_odom_pose, offset_imu_odom_pose;
+  Pose6D localizer_pose_, init_pose_;
 
+  Pose6D diff_pose, offset_imu_pose, offset_odom_pose, offset_imu_odom_pose;
   // 定义速度值 --包括实际速度值,和imu取到的速度值
   double current_velocity_x, current_velocity_y, current_velocity_z;
   double current_velocity_imu_x, current_velocity_imu_y, current_velocity_imu_z;
 
-  //  ros::Time current_scan_time;
   ros::Time previous_scan_time, previous_imu_time;
   ros::Time curr_imu_time;
 
   // 定义Publisher
-  ros::Publisher current_odom_pub, odom_pose_pub, current_points_pub, ndt_stat_pub;  // TODO:这是个啥发布????
-  ros::Subscriber points_sub, imu_sub, odom_sub;
+  ros::Publisher current_odom_pub, odom_pose_pub, current_points_pub, ndt_stat_pub;
+  ros::Subscriber points_sub, imu_sub, odom_sub, gps_sub;
 
   geometry_msgs::PoseStamped current_pose_msg, guess_pose_msg;
   std_msgs::Bool ndt_stat_msg;  // 确认是否是ndt的第一帧图像 bool类型
@@ -87,13 +84,7 @@ class LidarOdom {
   double step_size;   // Step size
   double trans_eps;  // Transformation epsilon
 
-  pcl::PointCloud<pcl::PointXYZI> localmap, globalmap, tmp_map;
-
-#ifdef CUDA_FOUND
-  gpu::GNormalDistributionsTransform gpu_ndt;
-   std::shared_ptr<gpu::GNormalDistributionsTransform> gpu_ndt = std::make_shared<gpu::GNormalDistributionsTransform>();
-#endif
-
+  pcl::PointCloud<pcl::PointXYZI> localmap, tmp_map;
   double min_add_scan_shift;  // 定义将点云添加到locaMap里的最小间隔值  --应该是添加到localMap吧??
   int initial_scan_loaded = 0;
   int surround_search_num_ = 0;
@@ -114,15 +105,18 @@ class LidarOdom {
   bool _use_odom = false;
   bool _imu_upside_down = false;  // 用以解决坐标系方向(正负变换)问题 (比如x变更为-x等)
   int method_type_temp = 0;
+  bool use_gps_ = true;
+  bool system_initialized_ = false;
+  std::string lidar_frame_id_, world_frame_id_;
 
-  // mutex
   std::mutex mutex_lock;
   std::queue<sensor_msgs::PointCloud2ConstPtr> cloud_queue_;
   std::queue<sensor_msgs::ImuConstPtr> imu_queue_;
   std::queue<nav_msgs::OdometryConstPtr> odom_queue_;
+  std::deque<nav_msgs::Odometry> gps_deque_;
 
   pcl::VoxelGrid<pcl::PointXYZI> downSizeFilterGlobalMap;
-  pcl::VoxelGrid<pcl::PointXYZI> downSizeFilterKeyFrames;
+  pcl::VoxelGrid<pcl::PointXYZI> downSizeFilterKeyframes;
   pcl::VoxelGrid<pcl::PointXYZI> downSizeFilterLocalmap;
 
   pcl::PointCloud<PointT>::Ptr cloud_keyposes_3d_;
@@ -131,14 +125,13 @@ class LidarOdom {
   std::deque<pcl::PointCloud<PointT>::Ptr> recent_keyframes_;
   std::vector<pcl::PointCloud<PointT>::Ptr> cloud_keyframes_;
 
-  pcl::PointCloud<pcl::PointXYZI>::Ptr scan_ptr, pc_target_;
-  pcl::PointCloud<pcl::PointXYZI>::Ptr transformed_scan_ptr;
+  pcl::PointCloud<pcl::PointXYZI>::Ptr scan_ptr_, pc_target_;
+  pcl::PointCloud<pcl::PointXYZI>::Ptr transformed_scan_ptr_;
 
-  Eigen::Matrix4f t_localizer;
-  Eigen::Matrix4f t_base_link;
+  Eigen::Matrix4f t_localizer_, t_base_link_; // 相对pose与全局pose
 
  public:
-  ros::NodeHandle nh;
+  ros::NodeHandle nh_;
 
   LidarOdom();
 
@@ -175,6 +168,10 @@ class LidarOdom {
   void OdomCB(const nav_msgs::OdometryConstPtr &msg);
 
   void PcCB(const sensor_msgs::PointCloud2ConstPtr &msg);
+
+  void GpsCB(const nav_msgs::OdometryConstPtr &msg);
+
+  bool SystemInit(const ros::Time &stamp);
 
   void ImuOdomCalc(ros::Time current_time);
 

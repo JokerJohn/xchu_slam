@@ -18,6 +18,8 @@ inline double deg2rad(double degrees) {
 
 extern double filter_size = 0.5;
 
+
+
 struct Pose6D {
   double x;
   double y;
@@ -26,12 +28,16 @@ struct Pose6D {
   double pitch;
   double yaw;
 
+  Eigen::MatrixXd cov;
+
   Pose6D() {
     x = y = z = roll = pitch = yaw = 0.0;
+    cov.setIdentity();
   };
 
   Pose6D(double _x, double _y, double _z, double _roll, double _pitch, double _yaw)
       : x(_x), y(_y), z(_z), roll(_roll), pitch(_pitch), yaw(_yaw) {
+    cov.setIdentity();
   };
 };
 
@@ -48,7 +54,7 @@ extern std::ostream &operator<<(std::ostream &out, const Pose6D &p)  //定义结
   return out;
 }
 
-extern Pose6D Matrix2Pose6D(Eigen::Matrix4d matrix) {
+extern Pose6D Matrix2Pose6D(const Eigen::Matrix4d &matrix) {
   Eigen::Vector3d pos = matrix.block<3, 1>(0, 3).matrix();
   //  Eigen::Vector3d pos = t_base_link.block<3, 1>(0, 3).matrix();
   Eigen::Matrix3d rot = matrix.block<3, 3>(0, 0).matrix();
@@ -82,7 +88,7 @@ extern Eigen::Isometry3d GeometryToEigen(nav_msgs::Odometry &pose_geo) {
   return pose_eigen;
 }
 
-extern Pose6D GeometryToPose6D(nav_msgs::Odometry &pose_geo) {
+extern Pose6D GeometryToPose6D(nav_msgs::Odometry pose_geo) {
   Eigen::Quaterniond quat(pose_geo.pose.pose.orientation.w,
                           pose_geo.pose.pose.orientation.x,
                           pose_geo.pose.pose.orientation.y,
@@ -95,5 +101,15 @@ extern Pose6D GeometryToPose6D(nav_msgs::Odometry &pose_geo) {
   tf::Matrix3x3(tf::Quaternion(quat.x(), quat.y(), quat.z(), quat.w())).getRPY(p.roll, p.pitch, p.yaw);
   return p;
 }
+extern Pose6D Odom2Pose6D(nav_msgs::Odometry::ConstPtr _odom) {
+  auto tx = _odom->pose.pose.position.x;
+  auto ty = _odom->pose.pose.position.y;
+  auto tz = _odom->pose.pose.position.z;
 
+  double roll, pitch, yaw;
+  geometry_msgs::Quaternion quat = _odom->pose.pose.orientation;
+  tf::Matrix3x3(tf::Quaternion(quat.x, quat.y, quat.z, quat.w)).getRPY(roll, pitch, yaw);
+
+  return Pose6D{tx, ty, tz, roll, pitch, yaw};
+}
 #endif //SRC_XCHU_MAPPING_INCLUDE_XCHU_MAPPING_COMMON_H_

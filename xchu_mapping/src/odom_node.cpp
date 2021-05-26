@@ -2,7 +2,7 @@
  * @file xchu_mapping.cpp
  * @author XCHU (2022087641@qq.com)
  * @brief  基于ndt的里程计
- *          imu部分暂时效果不好，不建议打开
+ *         imu部分暂时效果不好，不建议打开
  * @version 1.0
  * @date 2020-09-20
  *
@@ -16,43 +16,49 @@ int main(int argc, char **argv) {
   ROS_INFO("\033[1;32m---->\033[0m XCHU Odometry Started.");
 
   LidarOdom mapping;
-  ros::Rate rate(200);
-  while (ros::ok()) {
-    mapping.Run();
-    ros::spinOnce();
-    rate.sleep();
-  }
+  std::thread odom_thread(&LidarOdom::Run, &mapping);
+  //  ros::Rate rate(200);
+  //  while (ros::ok()) {
+  //    mapping.Run();
+  //    ros::spinOnce();
+  //    rate.sleep();
+  //  }
   ros::spin();
   return 0;
 }
 
-LidarOdom::LidarOdom() : nh("~") {
+LidarOdom::LidarOdom() : nh_("~") {
   // 初始化参数
   ParamInitial();
 
-  current_points_pub = nh.advertise<sensor_msgs::PointCloud2>("/current_points", 10);
-  //odom_pose_pub = nh.advertise<sensor_msgs::PointCloud2>("/odom_poses", 10);
-  current_odom_pub = nh.advertise<nav_msgs::Odometry>("/laser_odom_to_init", 100);
+  current_points_pub = nh_.advertise<sensor_msgs::PointCloud2>("/current_points", 10);
+  current_odom_pub = nh_.advertise<nav_msgs::Odometry>("/laser_odom_to_init", 100);
 
-  points_sub = nh.subscribe("/filtered_points", 10, &LidarOdom::PcCB, this);
-  odom_sub = nh.subscribe("/odom_raw", 50, &LidarOdom::OdomCB, this);// 编码器
-  imu_sub = nh.subscribe("/kitti/oxts/imu", 500, &LidarOdom::ImuCB, this);
+  points_sub = nh_.subscribe("/filtered_points", 10, &LidarOdom::PcCB, this);
+  odom_sub = nh_.subscribe("/odom_raw", 50, &LidarOdom::OdomCB, this);// 编码器
+  imu_sub = nh_.subscribe("/kitti/oxts/imu", 500, &LidarOdom::ImuCB, this);
+  if (use_gps_) {
+    gps_sub = nh_.subscribe<nav_msgs::Odometry>("/gps_odom", 20, &LidarOdom::GpsCB, this);
+  }
 }
 
 void LidarOdom::ParamInitial() {
-  nh.param<float>("ndt_resolution", ndt_res, 2.0);
-  nh.param<double>("ndt_step_size", step_size, 0.1);
-  nh.param<double>("ndt_trans_eps", trans_eps, 0.01);
-  nh.param<int>("ndt_max_iter", max_iter, 30);
-  nh.param<double>("min_add_scan_shift", min_add_scan_shift, 0.5);
-  nh.param<int>("surround_search_num_", surround_search_num_, 20);
-  nh.param<double>("max_submap_size", max_localmap_size, 5);
-  nh.param<bool>("use_imu", _use_imu, false);
-  nh.param<bool>("use_odom", _use_odom, false);
-  nh.param<bool>("imu_upside_down", _imu_upside_down, false);
-  nh.param<bool>("incremental_voxel_update", _incremental_voxel_update, false);
+  nh_.param<float>("ndt_resolution", ndt_res, 1.0);
+  nh_.param<double>("ndt_step_size", step_size, 0.1);
+  nh_.param<double>("ndt_trans_eps", trans_eps, 0.01);
+  nh_.param<int>("ndt_max_iter", max_iter, 30);
+  nh_.param<double>("min_add_scan_shift", min_add_scan_shift, 0.5);
+  nh_.param<int>("surround_search_num_", surround_search_num_, 20);
+  nh_.param<double>("max_submap_size", max_localmap_size, 5);
+  nh_.param<bool>("use_imu", _use_imu, false);
+  nh_.param<bool>("use_odom", _use_odom, false);
+  nh_.param<bool>("imu_upside_down", _imu_upside_down, false);
+  nh_.param<bool>("incremental_voxel_update", _incremental_voxel_update, false);
+  nh_.param<bool>("use_gps", use_gps_, false);
+  nh_.param<int>("ndt_method_type", method_type_temp, 0);
+  nh_.param<std::string>("lidar_frame_id", lidar_frame_id_, "velo_link");
+  nh_.param<std::string>("world_frame_id", world_frame_id_, "map");
 
-  nh.param<int>("ndt_method_type", method_type_temp, 0);
   _method_type = static_cast<MethodType>(method_type_temp);
   if (_method_type == MethodType::use_pcl) {
     std::cout << ">> Use PCL NDT <<" << std::endl;
@@ -82,29 +88,27 @@ void LidarOdom::ParamInitial() {
     ROS_ERROR("Please Define _method_type to conduct NDT");
   }
   // 这里一般需要设定初始的雷达高度init_z
-  nh.param<double>("init_x", _tf_x, 0);
-  nh.param<double>("init_y", _tf_y, 0);
-  nh.param<double>("init_z", _tf_z, 0);
-  nh.param<double>("init_roll", _tf_roll, 0);
-  nh.param<double>("init_pitch", _tf_pitch, 0);
-  nh.param<double>("init_yaw", _tf_yaw, 0);
-  // 利用旋转向量求变换矩阵
+  nh_.param<double>("init_x", _tf_x, 0);
+  nh_.param<double>("init_y", _tf_y, 0);
+  nh_.param<double>("init_z", _tf_z, 0);
+  nh_.param<double>("init_roll", _tf_roll, 0);
+  nh_.param<double>("init_pitch", _tf_pitch, 0);
+  nh_.param<double>("init_yaw", _tf_yaw, 0);
   Pose6D tl_pose(_tf_x, _tf_y, _tf_z, _tf_roll, _tf_pitch, _tf_yaw);
   tf_b2l = Pose6D2Matrix(tl_pose).cast<float>();
   tf_l2b = tf_b2l.inverse();
 
-//  double down_size = 0.5;
-  downSizeFilterKeyFrames.setLeafSize(filter_size, filter_size, filter_size); // 发布全局地图的采样size,设置小了导致系统卡顿
+  downSizeFilterKeyframes.setLeafSize(filter_size, filter_size, filter_size); // 发布全局地图的采样size,设置小了导致系统卡顿
   downSizeFilterLocalmap.setLeafSize(filter_size * 2, filter_size * 2, filter_size * 2);
   downSizeFilterGlobalMap.setLeafSize(filter_size, filter_size, filter_size);
 
   cloud_keyposes_3d_.reset(new pcl::PointCloud<PointT>());
-  scan_ptr.reset(new pcl::PointCloud<pcl::PointXYZI>());
+  scan_ptr_.reset(new pcl::PointCloud<pcl::PointXYZI>());
   pc_target_.reset(new pcl::PointCloud<PointT>());
-  transformed_scan_ptr.reset(new pcl::PointCloud<pcl::PointXYZI>());
+  transformed_scan_ptr_.reset(new pcl::PointCloud<pcl::PointXYZI>());
 
-  t_localizer.setIdentity();
-  t_base_link.setIdentity();
+  t_localizer_.setIdentity();
+  t_base_link_.setIdentity();
 
   // 定义速度值 --包括实际速度值,和imu取到的速度值
   current_velocity_x = current_velocity_y = current_velocity_z = 0.0;
@@ -112,79 +116,96 @@ void LidarOdom::ParamInitial() {
 }
 
 void LidarOdom::Run() {
-  if (_use_imu) {
-    if (!cloud_queue_.empty() && !imu_queue_.empty()) {
-      //align time stamp
-      mutex_lock.lock();
-      double time_diff = cloud_queue_.front()->header.stamp.toSec() - imu_queue_.front()->header.stamp.toSec();
-      //      ROS_WARN("IMU CLOUD TIME DIFF %f", time_diff);
-      if (!imu_queue_.empty() && imu_queue_.front()->header.stamp.toSec()
-          < cloud_queue_.front()->header.stamp.toSec() - 0.5 * 0.1) {
-        ROS_WARN(
-            "odom_node: time stamp unaligned error and imu discarded, pls check your data; odom time %f, pc time %f",
-            imu_queue_.front()->header.stamp.toSec(),
-            cloud_queue_.front()->header.stamp.toSec());
+  while (1) {
+    if (_use_imu) {
+      while (!cloud_queue_.empty() && !imu_queue_.empty()) {
+        //align time stamp
+        mutex_lock.lock();
+        double time_diff = cloud_queue_.front()->header.stamp.toSec() - imu_queue_.front()->header.stamp.toSec();
+        //      ROS_WARN("IMU CLOUD TIME DIFF %f", time_diff);
+        if (!imu_queue_.empty() && imu_queue_.front()->header.stamp.toSec()
+            < cloud_queue_.front()->header.stamp.toSec() - 0.5 * 0.1) {
+          ROS_WARN(
+              "odom_node: time stamp unaligned error and imu discarded, pls check your data; odom time %f, pc time %f",
+              imu_queue_.front()->header.stamp.toSec(),
+              cloud_queue_.front()->header.stamp.toSec());
+          imu_queue_.pop();
+          mutex_lock.unlock();
+          continue;
+        }
+        if (!cloud_queue_.empty() && cloud_queue_.front()->header.stamp.toSec()
+            < imu_queue_.front()->header.stamp.toSec() - 0.5 * 0.1) {
+          ROS_WARN(
+              "odom_node: time stamp unaligned error and imu discarded, pls check your data; odom time %f, pc time %f",
+              imu_queue_.front()->header.stamp.toSec(),
+              cloud_queue_.front()->header.stamp.toSec());
+          cloud_queue_.pop();
+          mutex_lock.unlock();
+          continue;
+        }
+        pcl::PointCloud<pcl::PointXYZI>::Ptr pointcloud_in(new pcl::PointCloud<pcl::PointXYZI>());
+        pcl::fromROSMsg(*cloud_queue_.front(), *pointcloud_in);
+        ros::Time current_scan_time = (*cloud_queue_.front()).header.stamp;
+        sensor_msgs::ImuConstPtr imu_msg = imu_queue_.front();
         imu_queue_.pop();
-        mutex_lock.unlock();
-        return;
-      }
-
-      if (!cloud_queue_.empty() && cloud_queue_.front()->header.stamp.toSec()
-          < imu_queue_.front()->header.stamp.toSec() - 0.5 * 0.1) {
-        ROS_WARN(
-            "odom_node: time stamp unaligned error and imu discarded, pls check your data; odom time %f, pc time %f",
-            imu_queue_.front()->header.stamp.toSec(),
-            cloud_queue_.front()->header.stamp.toSec());
         cloud_queue_.pop();
         mutex_lock.unlock();
-        return;
+
+        // 1.滑窗localmap
+        //      ExtractSurroundKeyframes();
+        // 2.基于距离刷新
+        //      ExtractSurroundKeyframesByDis();
+        OdomEstimate(pointcloud_in, current_scan_time, imu_msg);
       }
-      pcl::PointCloud<pcl::PointXYZI>::Ptr pointcloud_in(new pcl::PointCloud<pcl::PointXYZI>());
-      pcl::fromROSMsg(*cloud_queue_.front(), *pointcloud_in);
-      ros::Time current_scan_time = (*cloud_queue_.front()).header.stamp;
-      sensor_msgs::ImuConstPtr imu_msg = imu_queue_.front();
-      imu_queue_.pop();
-      cloud_queue_.pop();
-      mutex_lock.unlock();
+    } else {
+      while (!cloud_queue_.empty()) {
+        mutex_lock.lock();
+        pcl::PointCloud<pcl::PointXYZI>::Ptr pointcloud_in(new pcl::PointCloud<pcl::PointXYZI>());
+        pcl::fromROSMsg(*cloud_queue_.front(), *pointcloud_in);
+        ros::Time current_scan_time = (*cloud_queue_.front()).header.stamp;
+        cloud_queue_.pop();
+        mutex_lock.unlock();
 
-      // 1.滑窗localmap
-      //      ExtractSurroundKeyframes();
-      // 2.基于距离刷新
-      //      ExtractSurroundKeyframesByDis();
+        // system_time = current_scan_time;
+        // 等待GNSS初始化全局位姿, 只执行一次
+        if (use_gps_) {
+          if (!system_initialized_) {
+            system_initialized_ = SystemInit(current_scan_time);
+            ROS_WARN("Waiting for system initialized..");
+            continue;
+          }
+        }
 
-      OdomEstimate(pointcloud_in, current_scan_time, imu_msg);
+        // 匹配
+        //       ExtractSurroundKeyframes();
+        //      ExtractSurroundKeyframesByDis();
+        OdomEstimate(pointcloud_in, current_scan_time, nullptr);
+      }
     }
-  } else {
-    if (!cloud_queue_.empty()) {
-      mutex_lock.lock();
-      pcl::PointCloud<pcl::PointXYZI>::Ptr pointcloud_in(new pcl::PointCloud<pcl::PointXYZI>());
-      pcl::fromROSMsg(*cloud_queue_.front(), *pointcloud_in);
-      ros::Time current_scan_time = (*cloud_queue_.front()).header.stamp;
-      cloud_queue_.pop();
-      mutex_lock.unlock();
-      // 匹配
-      //       ExtractSurroundKeyframes();
-      //      ExtractSurroundKeyframesByDis();
-      OdomEstimate(pointcloud_in, current_scan_time, nullptr);
-    }
+    std::chrono::milliseconds dura(2);
+    std::this_thread::sleep_for(dura);
   }
+
 }
 
 void LidarOdom::OdomEstimate(const pcl::PointCloud<pcl::PointXYZI>::Ptr &filtered_scan_ptr,
                              const ros::Time &current_scan_time, const sensor_msgs::ImuConstPtr &imu_msg) {
-  ros::Time test_time_1 = ros::Time::now();
+  ndt_start = ros::Time::now();
   if (filtered_scan_ptr->empty()) {
     ROS_ERROR("check your cloud...");
     return;
   }
-  transformed_scan_ptr->clear();
-
-  ndt_start = ros::Time::now();
+  transformed_scan_ptr_->clear();
   if (initial_scan_loaded == 0 || cloud_keyframes_.empty()) {
-    // 点云转换到车体坐标系
-    pcl::transformPointCloud(*filtered_scan_ptr, *transformed_scan_ptr, tf_l2b);  // tf_btol为初始变换矩阵
-    localmap += *transformed_scan_ptr;
-    *pc_target_ += *transformed_scan_ptr;
+    // 点云转换到车体坐标系, 这里可以采用gps进行初始化
+    Eigen::Matrix4f init_matrix = Pose6D2Matrix(init_pose_).matrix().cast<float>();
+    std::cout << "init_matrix: " << init_matrix << std::endl;
+
+    pcl::transformPointCloud(*filtered_scan_ptr,
+                             *transformed_scan_ptr_,
+                             init_matrix * tf_l2b);  // tf_btol为初始变换矩阵
+    localmap += *transformed_scan_ptr_;
+    *pc_target_ += *transformed_scan_ptr_;
     if (_method_type == MethodType::use_pcl)
       pcl_ndt.setInputTarget(pc_target_);
     else if (_method_type == MethodType::use_cpu)
@@ -194,9 +215,7 @@ void LidarOdom::OdomEstimate(const pcl::PointCloud<pcl::PointXYZI>::Ptr &filtere
     ROS_INFO("new ndt target set");
     initial_scan_loaded = 1;
   }
-
   pc_target_.reset(new pcl::PointCloud<pcl::PointXYZI>(localmap));
-  ros::Time test_time_3 = ros::Time::now();
 
   // 计算初始姿态，上一帧点云结果+两针之间的匀速运动估计,pitch和roll不变
   guess_pose = previous_pose + diff_pose;
@@ -211,8 +230,6 @@ void LidarOdom::OdomEstimate(const pcl::PointCloud<pcl::PointXYZI>::Ptr &filtere
   } else if (_use_imu && !_use_odom) {
     // 计算imu的相关信息， 速度以及rpy变化量
     CaculateAccAndVelo(*imu_msg);
-    //    ImuCalc(current_scan_time);
-    //    ImuCalc2(current_scan_time);
     guess_pose_for_ndt = guess_pose_imu;
   } else if (!_use_imu && _use_odom) {
     OdomCalc(current_scan_time);
@@ -222,52 +239,47 @@ void LidarOdom::OdomEstimate(const pcl::PointCloud<pcl::PointXYZI>::Ptr &filtere
 
   Eigen::Matrix4f init_guess = Pose6D2Matrix(guess_pose_for_ndt).cast<float>();
 
-  t3_end = ros::Time::now();
-  d3 = t3_end - t3_start;
-
-// 用以保存ndt转换后的点云,align参数
+  // 用以保存ndt转换后的点云,align参数
   pcl::PointCloud<pcl::PointXYZI>::Ptr output_cloud(new pcl::PointCloud<pcl::PointXYZI>);
   if (_method_type == MethodType::use_pcl) {
     pcl_ndt.setInputSource(filtered_scan_ptr);
     pcl_ndt.align(*output_cloud, init_guess);  // pcl::aligin 需传入转换后的点云(容器),估计变换
     fitness_score = pcl_ndt.getFitnessScore();
-    t_localizer = pcl_ndt.getFinalTransformation();  // t_localizer为ndt变换得到的最终变换矩阵(即source和target之间的变换)
+    t_localizer_ = pcl_ndt.getFinalTransformation();  // t_localizer为ndt变换得到的最终变换矩阵(即source和target之间的变换)
     has_converged = pcl_ndt.hasConverged();
     final_num_iteration = pcl_ndt.getFinalNumIteration();
   } else if (_method_type == MethodType::use_cpu) {
     cpu_ndt.setInputSource(filtered_scan_ptr);
     cpu_ndt.align(*output_cloud, init_guess);
     fitness_score = cpu_ndt.getFitnessScore();
-    t_localizer = cpu_ndt.getFinalTransformation();
+    t_localizer_ = cpu_ndt.getFinalTransformation();
     has_converged = cpu_ndt.hasConverged();
     final_num_iteration = cpu_ndt.getFinalNumIteration();
   } else if (_method_type == MethodType::use_omp) {
     omp_ndt->setInputSource(filtered_scan_ptr);
     omp_ndt->align(*output_cloud, init_guess);
     fitness_score = omp_ndt->getFitnessScore();
-    t_localizer = omp_ndt->getFinalTransformation();
+    t_localizer_ = omp_ndt->getFinalTransformation();
     has_converged = omp_ndt->hasConverged();
     final_num_iteration = omp_ndt->getFinalNumIteration();
   }
   ndt_end = ros::Time::now();
-  ros::Time test_time_4 = ros::Time::now();  // TODO:
 
   // t_localizer是相对位姿,t_base_link对应的是全局位姿
-  t_base_link = t_localizer * tf_l2b;
-  pcl::transformPointCloud(*filtered_scan_ptr, *transformed_scan_ptr, t_localizer);   // 当前帧转换到全局地图上
-  localizer_pose = Matrix2Pose6D(t_localizer.cast<double>());
-  ndt_pose = Matrix2Pose6D(t_base_link.cast<double>());
+  t_base_link_ = t_localizer_ * tf_l2b;
+  pcl::transformPointCloud(*filtered_scan_ptr, *transformed_scan_ptr_, t_localizer_);   // 当前帧转换到全局地图上
+  localizer_pose_ = Matrix2Pose6D(t_localizer_.cast<double>());
+  current_pose = Matrix2Pose6D(t_base_link_.cast<double>());
 
   // current_pose 对应的是全局下的坐标!
   PointT this_pose_3d;
-  current_pose = ndt_pose;
-  this_pose_3d.x = ndt_pose.x;
-  this_pose_3d.y = ndt_pose.y;
-  this_pose_3d.z = ndt_pose.z;
+  this_pose_3d.x = current_pose.x;
+  this_pose_3d.y = current_pose.y;
+  this_pose_3d.z = current_pose.z;
   this_pose_3d.intensity = cloud_keyposes_3d_->points.size();  // 强度字段表示pose的index
   cloud_keyposes_3d_->points.push_back(this_pose_3d);
   cloud_keyframes_.push_back(filtered_scan_ptr);
-  cloud_keyposes_.push_back(t_base_link);
+  cloud_keyposes_.push_back(t_base_link_);
 
   // 根据current和previous两帧之间的scantime,以及两帧之间的位置,计算两帧之间的变化
   double secs = (current_scan_time - previous_scan_time).toSec();
@@ -297,18 +309,17 @@ void LidarOdom::OdomEstimate(const pcl::PointCloud<pcl::PointXYZI>::Ptr &filtere
     odom_size += shift_dis;
 
     // 这里的下采样网格大小将严重影响见图效果
-    downSizeFilterLocalmap.setInputCloud(transformed_scan_ptr);
-    downSizeFilterLocalmap.filter(*transformed_scan_ptr);
-    localmap += *transformed_scan_ptr; // localmap内的距离达到阈值就清空,并重新从0开始一帧一帧添加点云
-    tmp_map += *transformed_scan_ptr; // 此处不能直接复制给电晕
+    downSizeFilterLocalmap.setInputCloud(transformed_scan_ptr_);
+    downSizeFilterLocalmap.filter(*transformed_scan_ptr_);
+    localmap += *transformed_scan_ptr_; // localmap内的距离达到阈值就清空,并重新从0开始一帧一帧添加点云
+    tmp_map += *transformed_scan_ptr_;
 
-    // 只是说map更新了,因此target也要更新,不要落后太多
     // 注意:此时加入的target:map_ptr并不包括刚加入点云的transformed_scan_ptr
     if (_method_type == MethodType::use_pcl)
       pcl_ndt.setInputTarget(pc_target_);
     else if (_method_type == MethodType::use_cpu) {
       if (_incremental_voxel_update)
-        cpu_ndt.updateVoxelGrid(transformed_scan_ptr);
+        cpu_ndt.updateVoxelGrid(transformed_scan_ptr_);
       else
         cpu_ndt.setInputTarget(pc_target_);
     } else if (_method_type == MethodType::use_omp)
@@ -321,71 +332,62 @@ void LidarOdom::OdomEstimate(const pcl::PointCloud<pcl::PointXYZI>::Ptr &filtere
     localmap_size = 0.0;
   }
 
-/*  // 发布关键帧位姿
-  if (odom_pose_pub.getNumSubscribers() > 0) {
-    sensor_msgs::PointCloud2 msg;
-    pcl::toROSMsg(*cloud_keyposes_3d_, msg);
-    msg.header.frame_id = "camera_init";
-    msg.header.stamp = ros::Time::now();
-    odom_pose_pub.publish(msg);
-  }*/
   // 实时的点云也发布
   if (current_points_pub.getNumSubscribers() > 0) {
     sensor_msgs::PointCloud2::Ptr pointcloud_current_ptr(new sensor_msgs::PointCloud2);
-    pcl::toROSMsg(*transformed_scan_ptr, *pointcloud_current_ptr);
-    pointcloud_current_ptr->header.frame_id = "map";
+    pcl::toROSMsg(*transformed_scan_ptr_, *pointcloud_current_ptr);
+    pointcloud_current_ptr->header.frame_id = world_frame_id_;
     pointcloud_current_ptr->header.stamp = current_scan_time;
     current_points_pub.publish(*pointcloud_current_ptr);
   }
   if (current_odom_pub.getNumSubscribers() > 0) {
-    Eigen::Quaternionf tmp_q(t_localizer.block<3, 3>(0, 0));
+    Eigen::Quaternionf tmp_q(t_localizer_.block<3, 3>(0, 0));
     double roll, pitch, yaw;
     tf::Matrix3x3(tf::Quaternion(tmp_q.x(), tmp_q.y(), tmp_q.z(), tmp_q.w())).getRPY(roll, pitch, yaw);
 
     nav_msgs::Odometry odom;
     odom.header.stamp = current_scan_time;
-    odom.header.frame_id = "map";
+    odom.header.frame_id = world_frame_id_;
 
-    odom.pose.pose.position.x = t_localizer(0, 3);
-    odom.pose.pose.position.y = t_localizer(1, 3);
-    odom.pose.pose.position.z = t_localizer(2, 3);
+    odom.pose.pose.position.x = t_base_link_(0, 3);
+    odom.pose.pose.position.y = t_base_link_(1, 3);
+    odom.pose.pose.position.z = t_base_link_(2, 3);
 
     odom.pose.pose.orientation.x = tmp_q.x();
     odom.pose.pose.orientation.y = tmp_q.y();
     odom.pose.pose.orientation.z = tmp_q.z();
     odom.pose.pose.orientation.w = tmp_q.w();
 
-    odom.child_frame_id = "velo_link";
+    odom.child_frame_id = lidar_frame_id_;
     odom.twist.twist.linear.x = current_velocity_x;
     odom.twist.twist.linear.y = current_velocity_y;
-    odom.twist.twist.angular.z = current_velocity_z;
+    odom.twist.twist.linear.z = current_velocity_z;
     current_odom_pub.publish(odom);
 
     // tf
     static tf::TransformBroadcaster br;
     tf::Transform transform;
     tf::Quaternion q;
-    transform.setOrigin(tf::Vector3(t_localizer(0, 3),
-                                    t_localizer(1, 3),
-                                    t_localizer(2, 3)));
+    transform.setOrigin(tf::Vector3(t_base_link_(0, 3),
+                                    t_base_link_(1, 3),
+                                    t_base_link_(2, 3)));
     q.setW(tmp_q.w());
     q.setX(tmp_q.x());
     q.setY(tmp_q.y());
     q.setZ(tmp_q.z());
     transform.setRotation(q);
-    br.sendTransform(tf::StampedTransform(transform, current_scan_time, "map", "velo_link"));
-
+    br.sendTransform(tf::StampedTransform(transform, current_scan_time, world_frame_id_, lidar_frame_id_));
   }
 
-  std::cout << "*************************************************************************" << std::endl;
-  std::cout << "Number of filtered scan points: " << filtered_scan_ptr->size() << " points." << std::endl;
-  std::cout << "Number of localmap points: " << pc_target_->size() << " points." << std::endl;
-  std::cout << "Aligned Time: " << (ndt_end - ndt_start) * 1000 << " ms" << std::endl;
-  std::cout << "Fitness score: " << fitness_score << std::endl;
-  std::cout << "Number of iteration: " << final_num_iteration << std::endl;
-  std::cout << "scan shift: " << shift_dis << std::endl;
-  std::cout << "localmap shift: " << localmap_size << std::endl;
-  std::cout << "global path: " << odom_size << std::endl;
+  /* std::cout << "*************************************************************************" << std::endl;
+   std::cout << "Number of filtered scan points: " << filtered_scan_ptr->size() << " points." << std::endl;
+   std::cout << "Number of localmap points: " << pc_target_->size() << " points." << std::endl;
+   std::cout << "Aligned Time: " << (ndt_end - ndt_start) * 1000 << " ms" << std::endl;
+   std::cout << "Fitness score: " << fitness_score << std::endl;
+   std::cout << "Number of iteration: " << final_num_iteration << std::endl;
+   std::cout << "scan shift: " << shift_dis << std::endl;
+   std::cout << "localmap shift: " << localmap_size << std::endl;
+   std::cout << "global path: " << odom_size << std::endl;*/
 }
 
 void LidarOdom::ImuCB(const sensor_msgs::ImuConstPtr &msg) {
@@ -455,6 +457,68 @@ void LidarOdom::PcCB(const sensor_msgs::PointCloud2ConstPtr &msg) {
   mutex_lock.lock();
   cloud_queue_.push(msg);
   mutex_lock.unlock();
+}
+
+void LidarOdom::GpsCB(const nav_msgs::OdometryConstPtr &msg) {
+  if (use_gps_) {
+    mutex_lock.lock();
+    gps_deque_.push_back(*msg);
+    mutex_lock.unlock();
+  }
+}
+
+bool LidarOdom::SystemInit(const ros::Time &stamp) {
+  // 以点云时间戳为系统时间
+  if (use_gps_) {
+    ROS_WARN(" gps_deque_ size : %f ", gps_deque_.size());
+    bool gps_init = false;
+    while (!gps_deque_.empty()) {
+      mutex_lock.lock();
+      double off_time = stamp.toSec() - gps_deque_.front().header.stamp.toSec();
+      if (off_time > 0.5) {
+        gps_deque_.pop_front();
+        mutex_lock.unlock();
+      } else if (off_time < -0.5) {
+        ROS_ERROR("failed to algned gps and lidar time, %f", off_time);
+        break;
+      } else {
+        nav_msgs::Odometry msg = gps_deque_.front();
+        gps_deque_.pop_front();
+        mutex_lock.unlock();
+        ROS_WARN(" gps lidar off time: %f ", off_time);
+        init_pose_.x = msg.pose.pose.position.x;
+        init_pose_.y = msg.pose.pose.position.y;
+        init_pose_.z = msg.pose.pose.position.z;
+
+        double roll, pitch, yaw;
+        tf::Matrix3x3(tf::Quaternion(msg.pose.pose.orientation.x,
+                                     msg.pose.pose.orientation.y,
+                                     msg.pose.pose.orientation.z,
+                                     msg.pose.pose.orientation.w)).getRPY(roll, pitch, yaw);
+
+        init_pose_.roll = roll;
+        init_pose_.pitch = pitch;
+        init_pose_.yaw = yaw;
+
+        guess_pose = previous_pose = current_pose = init_pose_;
+        gps_init = true;
+        break;
+      }
+    }
+
+    // 初始化状态
+    if (gps_init) {
+      ROS_WARN("System initialized with gnss...");
+      return true;
+    } else {
+      ROS_ERROR("GPS initialized failed...");
+      return false;
+    }
+  } else {
+    guess_pose = previous_pose = current_pose = {0, 0, 0, 0, 0, 0};
+    ROS_WARN("System initialized without gnss...");
+    return true;
+  }
 }
 
 void LidarOdom::ImuOdomCalc(ros::Time current_time) {
@@ -786,8 +850,8 @@ void LidarOdom::ExtractSurroundKeyframes() {
     for (auto keyframe : recent_keyframes_) {
       *pc_target_ += *keyframe;
     }
-    downSizeFilterKeyFrames.setInputCloud(pc_target_);
-    downSizeFilterKeyFrames.filter(*pc_target_);
+    downSizeFilterKeyframes.setInputCloud(pc_target_);
+    downSizeFilterKeyframes.filter(*pc_target_);
 
     if (_method_type == MethodType::use_pcl)
       pcl_ndt.setInputTarget(pc_target_);
@@ -816,10 +880,10 @@ void LidarOdom::ExtractSurroundKeyframesByDis() {
     localmap_size += shift_dis;
     odom_size += shift_dis;
     // 这里的下采样网格大小将影响见图效果
-    downSizeFilterLocalmap.setInputCloud(transformed_scan_ptr);
-    downSizeFilterLocalmap.filter(*transformed_scan_ptr);
+    downSizeFilterLocalmap.setInputCloud(transformed_scan_ptr_);
+    downSizeFilterLocalmap.filter(*transformed_scan_ptr_);
 
-    recent_keyframes_.push_back(transformed_scan_ptr);
+    recent_keyframes_.push_back(transformed_scan_ptr_);
     // localmap += *transformed_scan_ptr; // localmap内的距离达到阈值就清空,并重新从0开始一帧一帧添加点云
     //    tmp_map += *transformed_scan_ptr;
     target_updated = true;
@@ -834,7 +898,7 @@ void LidarOdom::ExtractSurroundKeyframesByDis() {
       pcl_ndt.setInputTarget(pc_target_);
     else if (_method_type == MethodType::use_cpu) {
       if (_incremental_voxel_update)
-        cpu_ndt.updateVoxelGrid(transformed_scan_ptr);
+        cpu_ndt.updateVoxelGrid(transformed_scan_ptr_);
       else
         cpu_ndt.setInputTarget(pc_target_);
     } else if (_method_type == MethodType::use_omp)
@@ -851,7 +915,7 @@ void LidarOdom::ExtractSurroundKeyframesByDis() {
       pcl_ndt.setInputTarget(pc_target_);
     else if (_method_type == MethodType::use_cpu) {
       if (_incremental_voxel_update)
-        cpu_ndt.updateVoxelGrid(transformed_scan_ptr);
+        cpu_ndt.updateVoxelGrid(transformed_scan_ptr_);
       else
         cpu_ndt.setInputTarget(pc_target_);
     } else if (_method_type == MethodType::use_omp)

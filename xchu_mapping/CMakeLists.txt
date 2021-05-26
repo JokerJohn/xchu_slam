@@ -50,7 +50,6 @@ find_package(OpenCV REQUIRED)
 find_package(GTSAM REQUIRED)
 find_package(PCL REQUIRED)
 find_package(Eigen3 REQUIRED)
-#find_package(OpenCV REQUIRED)
 find_package(catkin REQUIRED COMPONENTS
         roscpp
         nav_msgs
@@ -66,16 +65,10 @@ find_package(catkin REQUIRED COMPONENTS
         #        ndt_omp
         )
 
-find_package(G2O REQUIRED)
-include_directories(SYSTEM ${G2O_INCLUDE_DIR} ${G2O_INCLUDE_DIRS})
-link_directories(${G2O_LIBRARY_DIRS})
-
 #[[ loop info现在暂时没用，原来准备吧loop detetction单独作为节点的]]
-add_message_files(FILES
-        FloorCoeffs.msg
-        LoopInfo.msg
-        )
+add_message_files(FILES FloorCoeffs.msg)
 
+# 这里链接lib文件夹中的.so
 link_directories(lib ${PCL_LIBRARY_DIRS} ${GTSAM_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 add_definitions(-DEIGEN_DISABLE_UNALIGNED_ARRAY_ASSERT)
@@ -95,14 +88,17 @@ include_directories(
         ${PCL_INCLUDE_DIRS}
         ${GTSAM_INCLUDE_DIR}
         ${OpenCV_INCLUDE_DIRS}
-
 )
 message("PCL Libraries include: ${PCL_LIBRARIES}")
 message("PCL version: ${PCL_VERSION}")
 
-# odom部分实现了一个ndt里程计，imu这些暂时没有调，因为kitti imu频率太低，无意义，后续换数据在适配
+## odom部分实现了一个ndt里程计，imu这些暂时没有调，因为kitti imu频率太低，无意义，后续换数据在适配
 add_executable(odom_node src/odom_node.cpp)
 target_link_libraries(odom_node ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenMP_LIBS} ${OMP_LIB} ndt_cpu ndt_omp)
+
+# 利用gps和imu做一个简单的里程计，主要是坐标对齐
+add_executable(gnss_node src/gps_node.cpp include/gps_tools/gpsTools.cpp)
+target_link_libraries(gnss_node ${catkin_LIBRARIES})
 
 #[[ filter部分做了简单的基于法向量的地面分割，直接copy的hdl graph slam，目前待使用]]
 add_executable(filter_node src/filter_node.cpp)
@@ -113,6 +109,7 @@ add_executable(pgo_node
         src/pgo_node.cpp
         include/scancontext/Scancontext.cpp
         include/isc/ISCGeneration.cpp
+        include/gps_tools/gpsTools.cpp
         )
 if (NOT MACOSX)
     target_compile_options(pgo_node

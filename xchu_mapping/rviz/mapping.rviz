@@ -6,18 +6,18 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
-        - /smartcar1
-        - /smartcar1/Status1
-        - /current_points1/Status1
+        - /global_map1/Status1
         - /lidar_odom1/Status1
         - /lidar_odom1/Shape1
         - /lidar_odom1/Covariance1/Position1
         - /lidar_odom1/Covariance1/Orientation1
-        - /ground_points1
-        - /final_Odom1/Status1
         - /final_Odom1/Shape1
         - /final_Odom1/Covariance1
         - /pose_graph1/Namespaces1
+        - /gps_Odometry1/Shape1
+        - /gps_Odometry1/Covariance1
+        - /gps_Odometry1/Covariance1/Position1
+        - /pgo_odom1/Shape1
       Splitter Ratio: 0.6029411554336548
     Tree Height: 733
   - Class: rviz/Selection
@@ -38,7 +38,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: current_points
+    SyncSource: global_map
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -74,7 +74,7 @@ Visualization Manager:
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
-        aft_mapped:
+        velo_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -122,7 +122,7 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 1
-      Size (m): 0.30000001192092896
+      Size (m): 0.20000000298023224
       Style: Flat Squares
       Topic: /global_map
       Unreliable: true
@@ -154,7 +154,7 @@ Visualization Manager:
       Size (Pixels): 6
       Size (m): 0.009999999776482582
       Style: Points
-      Topic: /odom_poses
+      Topic: /gps_poses
       Unreliable: true
       Use Fixed Frame: true
       Use rainbow: true
@@ -162,8 +162,8 @@ Visualization Manager:
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: -36.64546585083008
-        Min Value: -42.29472732543945
+        Max Value: 4.5417866706848145
+        Min Value: -0.3061966896057129
         Value: true
       Axis: Z
       Channel Name: intensity
@@ -184,7 +184,7 @@ Visualization Manager:
       Size (Pixels): 3
       Size (m): 0.10000000149011612
       Style: Points
-      Topic: /current_points
+      Topic: /filtered_points
       Unreliable: true
       Use Fixed Frame: true
       Use rainbow: true
@@ -198,7 +198,7 @@ Visualization Manager:
       Axis: Z
       Channel Name: intensity
       Class: rviz/PointCloud2
-      Color: 245; 121; 0
+      Color: 115; 210; 22
       Color Transformer: FlatColor
       Decay Time: 0
       Enabled: false
@@ -207,14 +207,14 @@ Visualization Manager:
       Max Intensity: 0
       Min Color: 0; 0; 0
       Min Intensity: 0
-      Name: localmap
+      Name: gps_pose
       Position Transformer: XYZ
       Queue Size: 10
       Selectable: true
       Size (Pixels): 2
       Size (m): 0.20000000298023224
       Style: Points
-      Topic: /recent_keyframes
+      Topic: /gps_poses
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
@@ -237,18 +237,18 @@ Visualization Manager:
           Value: true
         Value: true
       Enabled: true
-      Keep: 10000
+      Keep: 200
       Name: lidar_odom
       Position Tolerance: 0.10000000149011612
       Shape:
         Alpha: 1
         Axes Length: 2
         Axes Radius: 0.20000000298023224
-        Color: 206; 92; 0
-        Head Length: 0.5
+        Color: 237; 212; 0
+        Head Length: 0.10000000149011612
         Head Radius: 0.20000000298023224
         Shaft Length: 1
-        Shaft Radius: 0.5
+        Shaft Radius: 0.20000000298023224
         Value: Arrow
       Topic: /laser_odom_to_init
       Unreliable: true
@@ -444,7 +444,7 @@ Visualization Manager:
           Scale: 1
           Value: true
         Value: true
-      Enabled: true
+      Enabled: false
       Keep: 10000
       Name: final_Odom
       Position Tolerance: 0.10000000149011612
@@ -460,14 +460,13 @@ Visualization Manager:
         Value: Arrow
       Topic: /final_odom
       Unreliable: true
-      Value: true
+      Value: false
     - Class: rviz/MarkerArray
       Enabled: true
       Marker Topic: /markers
       Name: pose_graph
       Namespaces:
         edges: true
-        loop: true
         nodes: true
       Queue Size: 100
       Value: true
@@ -483,6 +482,74 @@ Visualization Manager:
       Transport Hint: raw
       Unreliable: false
       Value: false
+    - Angle Tolerance: 0.10000000149011612
+      Class: rviz/Odometry
+      Covariance:
+        Orientation:
+          Alpha: 0.5
+          Color: 255; 255; 127
+          Color Style: Unique
+          Frame: Local
+          Offset: 1
+          Scale: 1
+          Value: true
+        Position:
+          Alpha: 0.800000011920929
+          Color: 204; 0; 0
+          Scale: 1
+          Value: true
+        Value: true
+      Enabled: true
+      Keep: 200
+      Name: gps_Odometry
+      Position Tolerance: 0.10000000149011612
+      Shape:
+        Alpha: 1
+        Axes Length: 1
+        Axes Radius: 0.10000000149011612
+        Color: 204; 0; 0
+        Head Length: 1
+        Head Radius: 0.10000000149011612
+        Shaft Length: 0.10000000149011612
+        Shaft Radius: 0.10000000149011612
+        Value: Arrow
+      Topic: /gps_odom
+      Unreliable: true
+      Value: true
+    - Angle Tolerance: 0.10000000149011612
+      Class: rviz/Odometry
+      Covariance:
+        Orientation:
+          Alpha: 0.5
+          Color: 255; 255; 127
+          Color Style: Unique
+          Frame: Local
+          Offset: 1
+          Scale: 1
+          Value: true
+        Position:
+          Alpha: 0.30000001192092896
+          Color: 204; 51; 204
+          Scale: 1
+          Value: true
+        Value: true
+      Enabled: true
+      Keep: 200
+      Name: pgo_odom
+      Position Tolerance: 0.10000000149011612
+      Shape:
+        Alpha: 1
+        Axes Length: 1
+        Axes Radius: 0.10000000149011612
+        Color: 5; 21; 224
+        Head Length: 0.30000001192092896
+        Head Radius: 0.20000000298023224
+        Shaft Length: 1
+        Shaft Radius: 0.20000000298023224
+        Value: Arrow
+      Topic: /laser_odom_after_pgo
+      Unreliable: false
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -511,25 +578,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 454.89483642578125
+      Distance: 54.249942779541016
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 10.060568809509277
-        Y: -4.6273369789123535
-        Z: -2.6829044818878174
+        X: 48.36452865600586
+        Y: -20.204843521118164
+        Z: 88.91747283935547
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
       Pitch: 1.5697963237762451
-      Target Frame: velo_link
+      Target Frame: aft_mapped
       Value: ThirdPersonFollower (rviz)
-      Yaw: 4.39857816696167
+      Yaw: 3.1285884380340576
     Saved: ~
 Window Geometry:
   Displays:
