@@ -5,6 +5,7 @@
 #ifndef SRC_XCHU_MAPPING_INCLUDE_XCHU_MAPPING_COMMON_H_
 #define SRC_XCHU_MAPPING_INCLUDE_XCHU_MAPPING_COMMON_H_
 #include <tf/transform_datatypes.h>
+#include <Eigen/Core>
 
 typedef pcl::PointXYZI PointT;
 
@@ -17,6 +18,7 @@ inline double deg2rad(double degrees) {
 }
 
 extern double filter_size = 0.5;
+
 
 
 

@@ -49,7 +49,7 @@ void LidarOdom::ParamInitial() {
   nh_.param<int>("ndt_max_iter", max_iter, 30);
   nh_.param<double>("min_add_scan_shift", min_add_scan_shift, 0.5);
   nh_.param<int>("surround_search_num_", surround_search_num_, 20);
-  nh_.param<double>("max_submap_size", max_localmap_size, 5);
+  nh_.param<double>("max_submap_size", max_localmap_size, 3);
   nh_.param<bool>("use_imu", _use_imu, false);
   nh_.param<bool>("use_odom", _use_odom, false);
   nh_.param<bool>("imu_upside_down", _imu_upside_down, false);
@@ -379,7 +379,7 @@ void LidarOdom::OdomEstimate(const pcl::PointCloud<pcl::PointXYZI>::Ptr &filtere
     br.sendTransform(tf::StampedTransform(transform, current_scan_time, world_frame_id_, lidar_frame_id_));
   }
 
-  /* std::cout << "*************************************************************************" << std::endl;
+   std::cout << "*************************************************************************" << std::endl;
    std::cout << "Number of filtered scan points: " << filtered_scan_ptr->size() << " points." << std::endl;
    std::cout << "Number of localmap points: " << pc_target_->size() << " points." << std::endl;
    std::cout << "Aligned Time: " << (ndt_end - ndt_start) * 1000 << " ms" << std::endl;
@@ -387,7 +387,7 @@ void LidarOdom::OdomEstimate(const pcl::PointCloud<pcl::PointXYZI>::Ptr &filtere
    std::cout << "Number of iteration: " << final_num_iteration << std::endl;
    std::cout << "scan shift: " << shift_dis << std::endl;
    std::cout << "localmap shift: " << localmap_size << std::endl;
-   std::cout << "global path: " << odom_size << std::endl;*/
+   std::cout << "global path: " << odom_size << std::endl;
 }
 
 void LidarOdom::ImuCB(const sensor_msgs::ImuConstPtr &msg) {

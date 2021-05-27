@@ -12,6 +12,8 @@
 #include <queue>
 #include <chrono>
 #include <thread>
+#include <fstream>
+
 #include <ros/ros.h>
 #include <nav_msgs/Odometry.h>
 #include <sensor_msgs/Imu.h>
@@ -65,8 +67,7 @@ class GNSSOdom {
   double origin_latitude = 0.0, origin_longitude = 0.0, origin_altitude = 0.0;
   Eigen::Vector3d init_pos_;
   double origin_east = 0.0, origin_north = 0.0, origin_height;
-// imu到lidar的转换
-  Eigen::Matrix4d T_imu2velo = Eigen::Matrix4d::Identity();
+  // imu到lidar的转换
   Eigen::Vector3d pos;
   Eigen::Matrix3d rot;
 
@@ -74,6 +75,10 @@ class GNSSOdom {
   ros::Publisher gps_odom_pub_;
   ros::Subscriber imu_sub_, gps_sub_;
   std::string imu_topic, gps_topic, world_frame_id_;
+  std::string save_dir_;
+  bool use_kitti_ = false;
+  Eigen::Matrix4d T_imu2velo = Eigen::Matrix4d::Identity();
+
 
   // imu和gps队列
   std::mutex mutex_lock;
@@ -81,8 +86,6 @@ class GNSSOdom {
   std::deque<sensor_msgs::NavSatFixConstPtr> gpsBuf;
 
   bool init_xyz = false;
-  bool init_insxyz = false;
-  bool init_utm = false;
   bool use_localmap = false;
 };
 

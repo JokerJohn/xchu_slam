@@ -56,8 +56,17 @@ void PGO::InitParams() {
   nh.param<std::string>("gps_topic", gps_topic_, "/kitti/oxts/gps/fix");
   nh.param<int>("loop_method", loop_method, 1);
   nh.param<bool>("use_gps", useGPS, false);
+  nh.param<bool>("use_kitti", use_kitti_, false);
   nh.param<std::string>("lidar_frame_id", lidar_frame_id_, "velo_link");
   nh.param<std::string>("world_frame_id", world_frame_id_, "map");
+
+  if (use_kitti_) {
+    velo2camera.setIdentity();
+    velo2camera << 0, -1, 0, 0,
+        0, 0, -1, 0,
+        1, 0, 0, -0.08,
+        0, 0, 0, 1;
+  }
 
   //  std::cout << "topic: " << odom_topic_ << "," << cloud_topic_ << std::endl;
   // 每隔2m选取关键帧
@@ -145,24 +154,23 @@ void PGO::GpsCB(const nav_msgs::OdometryConstPtr &_gps) {
 }
 
 void PGO::Run() {
-
   while (1) {
     while (!cloud_queue_.empty() && !odom_queue_.empty()) {
       mutex_.lock();
       double time2 = odom_queue_.front()->header.stamp.toSec();
       double time3 = cloud_queue_.front()->header.stamp.toSec();
       // align timestamp
-      if (!odom_queue_.empty() && (time2 < time3 - 0.5 * 0.1)) {
+      while (!odom_queue_.empty() && (time2 < time3 - 0.5 * 0.1)) {
         ROS_WARN("time stamp unaligned error and odometry discarded, pls check your data -->  optimization");
         odom_queue_.pop();
         mutex_.unlock();
-        continue;
+        break;
       }
-      if (!cloud_queue_.empty() && (time3 < time2 - 0.5 * 0.1)) {
+      while (!cloud_queue_.empty() && (time3 < time2 - 0.5 * 0.1)) {
         ROS_WARN("time stamp unaligned error and pointCloud discarded, pls check your data -->  optimization");
         cloud_queue_.pop();
         mutex_.unlock();
-        continue;
+        break;
       }
 
       if (!init_time) {
@@ -178,7 +186,7 @@ void PGO::Run() {
       Pose6D pose_curr = Odom2Pose6D(odom_curr);
 
       // align gps
-      if (!gps_queue_.empty()) {
+      while (!gps_queue_.empty()) {
         auto time4 = gps_queue_.front()->header.stamp.toSec();
         curr_gps_ = gps_queue_.front();
         //ROS_WARN("GNSS DIFF:%f", time4 - curr_odom_time_);
@@ -275,7 +283,7 @@ void PGO::Run() {
                                                             curr_node_idx,
                                                             poseFrom.between(poseTo),
                                                             odomNoise));
-          // ROS_WARN("odom factor added at node %d ", curr_node_idx);
+          ROS_WARN("odom factor added at node %d ", curr_node_idx);
           if (hasGPSforThisKF) {
             // 里程计位姿协方差较大时候加入
             //            if (pose_covariance_curr(3, 3) < pose_cov_thre && pose_covariance_curr(4, 4) < pose_cov_thre)
@@ -531,9 +539,9 @@ void PGO::ICPRefine() {
 
 void PGO::MapVisualization() {
   ros::Rate rate(0.1);
-  while (1) {
-    while (keyframeLaserClouds.size() > 1 && keyframePosesUpdated.size() > 1) {
-      rate.sleep();
+  while (ros::ok()) {
+    rate.sleep();
+    if (keyframeLaserClouds.size() > 1 && keyframePosesUpdated.size() > 1) {
       PublishPoseAndFrame();
     }
   }
@@ -622,37 +630,6 @@ pcl::PointCloud<PointT>::Ptr PGO::TransformCloud2Map(const pcl::PointCloud<Point
   return cloudOut;
 }
 
-pcl::PointCloud<PointT>::Ptr PGO::TransformCloud2Map(pcl::PointCloud<PointT>::Ptr cloudIn,
-                                                     gtsam::Pose3 transformIn) {
-  pcl::PointCloud<PointT>::Ptr cloudOut(new pcl::PointCloud<PointT>());
-
-  PointT *pointFrom;
-
-  int cloudSize = cloudIn->size();
-  cloudOut->resize(cloudSize);
-
-  Eigen::Affine3f transCur = pcl::getTransformation(
-      transformIn.translation().x(), transformIn.translation().y(), transformIn.translation().z(),
-      transformIn.rotation().roll(), transformIn.rotation().pitch(), transformIn.rotation().yaw());
-
-  int numberOfCores = 8; // TODO move to yaml
-#pragma omp parallel for num_threads(numberOfCores)
-  for (int i = 0; i < cloudSize; ++i) {
-    pointFrom = &cloudIn->points[i];
-    cloudOut->points[i].x =
-        transCur(0, 0) * pointFrom->x + transCur(0, 1) * pointFrom->y + transCur(0, 2) * pointFrom->z
-            + transCur(0, 3);
-    cloudOut->points[i].y =
-        transCur(1, 0) * pointFrom->x + transCur(1, 1) * pointFrom->y + transCur(1, 2) * pointFrom->z
-            + transCur(1, 3);
-    cloudOut->points[i].z =
-        transCur(2, 0) * pointFrom->x + transCur(2, 1) * pointFrom->y + transCur(2, 2) * pointFrom->z
-            + transCur(2, 3);
-    cloudOut->points[i].intensity = pointFrom->intensity;
-  }
-  return cloudOut;
-} // transformPointCloud
-
 bool PGO::SaveMap(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res) {
   ROS_WARN("SAVE MAP AND G2O..");
   ISAM2Update(); // 最后一次更新全局地图
@@ -677,9 +654,6 @@ bool PGO::SaveMap(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
   map->height = 1;
   map->is_dense = false;
 
-  //  map_no_ground->width = map_no_ground->points.size();
-  //  map_no_ground->height = 1;
-  //  map_no_ground->is_dense = false;
   pcl::PointCloud<PointT>::Ptr poses(new pcl::PointCloud<PointT>());
   pcl::copyPointCloud(*keyframePoints, *poses);
   poses->width = poses->points.size();
@@ -690,74 +664,36 @@ bool PGO::SaveMap(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
 
   pcl::io::savePCDFile(file_path + "trajectory.pcd", *poses);
   pcl::io::savePCDFile(file_path + "finalMap.pcd", *map);
-
   std::cout << "save odom csv files and g2o" << std::endl;
 
 
   // 生成地图原点
-  if (useGPS && gpsOffsetInitialized) {
+/*  if (useGPS) {
     std::ofstream out;
     out.open(file_path + "map_origin.txt", std::ios::out);
     out << origin_latitude << " " << origin_longitude << " " << origin_altitude;
     out.close();
-  }
+  }*/
 
   // 保存odom的csv
   ROS_WARN("save odom csv files and xchu_g2o");
   std::ofstream outFile, outFile2, outFile3;
 
-/*
-  // csv
-  outFile.open(file_path + "odom_final.csv", std::ios::out);
-  outFile2.open(file_path + "odom.csv", std::ios::out);
-  outFile << "stamp,x,y,z,roll,pitch,yaw" << std::endl;
-  outFile2 << "stamp,x,y,z,roll,pitch,yaw" << std::endl;
-  for (int j = 0; j < keyframePosesUpdated.size(); ++j) {
-    outFile << keyframeTimes[j] << ","
-            << keyframePosesUpdated[j].x << "," << keyframePosesUpdated[j].y << "," << keyframePosesUpdated[j].z << ","
-            << keyframePosesUpdated[j].roll << "," << keyframePosesUpdated[j].pitch << ","
-            << keyframePosesUpdated[j].yaw
-            <<
-            endl;
-
-    outFile2 << keyframeTimes[j] << ","
-             << originPoses[j].x << "," << originPoses[j].y << "," << originPoses[j].z << ","
-             << originPoses[j].roll << "," << originPoses[j].pitch << "," << originPoses[j].yaw
-             <<
-             endl;
-  }
-*/
-
-
 
   // kitti txt
   outFile.open(file_path + "odom_tum.txt", std::ios::out);
-  //outFile2.open(file_path + "odom.txt", std::ios::out);
   outFile3.open(file_path + "lidar_odom.txt", std::ios::out);
-
-  Matrix4d velo2camera;
-  velo2camera << 0, -1, 0, 0,
-      0, 0, -1, 0,
-      1, 0, 0, -0.08,
-      0, 0, 0, 1;
 
   for (int j = 0; j < keyframePosesUpdated.size(); ++j) {
 
     //Matrix4d pose2 = Pose6D2Matrix(originPoses[j]);
     Pose6D new_pose = keyframePosesUpdated[j];
     // kitti的gt是相机pose,所以需要把雷达pose转换到相机上。
-    Matrix4d pose = velo2camera * Pose6D2Matrix(new_pose);
-
-//    outFile << std::setprecision(10) << pose(0, 0) << " " << pose(0, 1) << " " << pose(0, 2) << " " << pose(0, 3) << " "
-//            << pose(1, 0) << " " << pose(1, 1) << " " << pose(1, 2) << " " << pose(1, 3) << " "
-//            << pose(2, 0) << " " << pose(2, 1) << " " << pose(2, 2) << " " << pose(2, 3)
-//            << endl;
-
-//    outFile2 << std::setprecision(10) << pose2(0, 0) << " " << pose2(0, 1) << " " << pose2(0, 2) << " " << pose2(0, 3)
-//             << " "
-//             << pose2(1, 0) << " " << pose2(1, 1) << " " << pose2(1, 2) << " " << pose2(1, 3) << " "
-//             << pose2(2, 0) << " " << pose2(2, 1) << " " << pose2(2, 2) << " " << pose2(2, 3)
-//             << endl;
+    Eigen::Matrix4d pose = Eigen::Matrix4d::Identity();
+    if (use_kitti_)
+      pose = velo2camera * Pose6D2Matrix(new_pose);
+    else
+      pose = Pose6D2Matrix(new_pose);
 
     double time = keyframeTimes[j] - time_stamp_;
     Eigen::Matrix3d rot = pose.block<3, 3>(0, 0).matrix();
@@ -773,7 +709,11 @@ bool PGO::SaveMap(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
     nav_msgs::Odometry msg = *originOdom[j];
 
     Matrix4d pose2 = GeometryToEigen(msg).matrix();
-    Matrix4d pose = velo2camera * pose2;
+    Eigen::Matrix4d pose = Eigen::Matrix4d::Identity();
+    if (use_kitti_)
+      pose = velo2camera * pose2;
+    else
+      pose = pose2;
 
     double time = msg.header.stamp.toSec() - time_stamp_;
     Eigen::Matrix3d rot = pose.block<3, 3>(0, 0).matrix();
@@ -782,9 +722,7 @@ bool PGO::SaveMap(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
              << quat.x() << " " << quat.y() << " " << quat.z() << " " << quat.w()
              << std::endl;
   }
-
   outFile.close();
-  //  outFile2.close();
   outFile3.close();
 
   // 同事保存g2o文件
@@ -873,18 +811,18 @@ void PGO::SaveMap() {
   //outFile2.open(file_path + "odom.txt", std::ios::out);
   outFile3.open(file_path + "lidar_odom.txt", std::ios::out);
 
-  Matrix4d velo2camera;
-  velo2camera << 0, -1, 0, 0,
-      0, 0, -1, 0,
-      1, 0, 0, -0.08,
-      0, 0, 0, 1;
+  /* Matrix4d velo2camera;
+   velo2camera << 0, -1, 0, 0,
+       0, 0, -1, 0,
+       1, 0, 0, -0.08,
+       0, 0, 0, 1;*/
 
   for (int j = 0; j < keyframePosesUpdated.size(); ++j) {
 
     //Matrix4d pose2 = Pose6D2Matrix(originPoses[j]);
     Pose6D new_pose = keyframePosesUpdated[j];
     // kitti的gt是相机pose,所以需要把雷达pose转换到相机上。
-    Matrix4d pose = velo2camera * Pose6D2Matrix(new_pose);
+    Matrix4d pose =/* velo2camera * */Pose6D2Matrix(new_pose);
 
 //    outFile << std::setprecision(10) << pose(0, 0) << " " << pose(0, 1) << " " << pose(0, 2) << " " << pose(0, 3) << " "
 //            << pose(1, 0) << " " << pose(1, 1) << " " << pose(1, 2) << " " << pose(1, 3) << " "
@@ -911,7 +849,7 @@ void PGO::SaveMap() {
     nav_msgs::Odometry msg = *originOdom[j];
 
     Matrix4d pose2 = GeometryToEigen(msg).matrix();
-    Matrix4d pose = velo2camera * pose2;
+    Matrix4d pose =  /*velo2camera*/ pose2;
 
     double time = msg.header.stamp.toSec() - time_stamp_;
     Eigen::Matrix3d rot = pose.block<3, 3>(0, 0).matrix();
@@ -945,36 +883,6 @@ void PGO::PublishPoseAndFrame() {
        node_idx++) // -1 is just delayed visualization (because sometimes mutexed while adding(push_back) a new one)
   {
     const Pose6D &pose_est = keyframePosesUpdated.at(node_idx); // upodated poses
-
-/*    // publish odom
-    nav_msgs::Odometry odomAftPGOthis;
-    odomAftPGOthis.header.frame_id = world_frame_id_;
-    odomAftPGOthis.child_frame_id = lidar_frame_id_;
-    odomAftPGOthis.header.stamp = ros::Time().fromSec(keyframeTimes[node_idx]);
-    odomAftPGOthis.pose.pose.position.x = keyframePosesUpdated.front().x;
-    odomAftPGOthis.pose.pose.position.y = keyframePosesUpdated.front().y;
-    odomAftPGOthis.pose.pose.position.z = keyframePosesUpdated.front().z;
-    odomAftPGOthis.pose.pose.orientation =
-        tf::createQuaternionMsgFromRollPitchYaw(keyframePosesUpdated.front().roll,
-                                                keyframePosesUpdated.front().pitch,
-                                                keyframePosesUpdated.front().yaw);
-    final_odom_pub.publish(odomAftPGOthis); // last pose
-
-
-    // tf
-    static tf::TransformBroadcaster br;
-    tf::Transform transform;
-    tf::Quaternion q;
-    transform.setOrigin(tf::Vector3(odomAftPGOthis.pose.pose.position.x,
-                                    odomAftPGOthis.pose.pose.position.y,
-                                    odomAftPGOthis.pose.pose.position.z));
-    q.setW(odomAftPGOthis.pose.pose.orientation.w);
-    q.setX(odomAftPGOthis.pose.pose.orientation.x);
-    q.setY(odomAftPGOthis.pose.pose.orientation.y);
-    q.setZ(odomAftPGOthis.pose.pose.orientation.z);
-    transform.setRotation(q);
-    br.sendTransform(tf::StampedTransform(transform, odomAftPGOthis.header.stamp, world_frame_id_, lidar_frame_id_));*/
-
     if (counter % SKIP_FRAMES == 0) {
       *laserCloudMapPGO += *TransformCloud2Map(keyframeLaserClouds[node_idx], keyframePosesUpdated[node_idx]);
     }

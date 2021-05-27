@@ -128,7 +128,7 @@ class PGO {
   std::string save_dir_;
   std::string odom_topic_, cloud_topic_, gps_topic_;
   ros::ServiceServer srv_save_map_;
-
+  bool use_kitti_ = false;
 
   double time_stamp_ = 0.0;
   bool init_time = false;
@@ -173,6 +173,8 @@ class PGO {
   ISCGeneration iscGeneration;
 
   std::string lidar_frame_id_, world_frame_id_;
+  Eigen::Matrix4d velo2camera;
+
 
   bool laserCloudMapPGORedraw = true;
   float pose_cov_thre = 0.1;
@@ -235,8 +237,6 @@ class PGO {
   }
 
   pcl::PointCloud<PointT>::Ptr TransformCloud2Map(const pcl::PointCloud<PointT>::Ptr &cloudIn, const Pose6D &tf);
-
-  pcl::PointCloud<PointT>::Ptr TransformCloud2Map(pcl::PointCloud<PointT>::Ptr cloudIn, gtsam::Pose3 transformIn);
 
 
   /**

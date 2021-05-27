@@ -4,7 +4,8 @@
 
     <arg name="sensor_height" default="1.75"/><!--雷达的安装高度-->
     <arg name="use_gps" default="false"/>
-    <arg name="lidar_frame_id" default="velo_link"/>
+    <arg name="use_kitti" default="false"/><!--kitti数据集的话，pgo在savemap的时候会把lidar pose转换到zcamera上-->
+    <arg name="lidar_frame_id" default="rs_lidar"/>
     <arg name="world_frame_id" default="map"/>
 
     <!--雷克萨斯小车模型，来自autoware -->
@@ -14,12 +15,15 @@
         <!--gps节点主要是gps的坐标系转换，以起始位置为地图原点，然后odom节点中利用gps进行初始化-->
         <node pkg="xchu_mapping" type="gnss_node" name="gnss_node" output="screen">
             <param name="world_frame_id" value="$(arg world_frame_id)" type="string"/>
+            <param name="save_dir_" value="$(find xchu_mapping)/pcd/"/>
+            <param name="use_kitti" value="$(arg use_kitti)" type="bool"/>
         </node>
     </group>
 
     <!--点云过滤节点可用可不用，用的话修改cloud topic即可，注意下采样网格的size默认为0.5，如果是基于边缘和平面点的里程计需要调节其大小-->
     <node pkg="xchu_mapping" type="filter_node" name="filter_node" output="screen">
-        <param name="cloud_topic" value="/kitti/velo/pointcloud" type="string"/>
+<!--        <param name="cloud_topic" value="/kitti/velo/pointcloud" type="string"/>-->
+        <param name="cloud_topic" value="/rslidar_points" type="string"/>
         <param name="lidar_frame_id" value="$(arg lidar_frame_id)" type="string"/>
         <param name="sensor_height" value="$(arg sensor_height)" type="double"/>
     </node>
@@ -43,6 +47,7 @@
         <param name="odom_topic" value="/laser_odom_to_init" type="string"/>
         <param name="cloud_topic" value="/filtered_points" type="string"/>
         <param name="use_gps" value="$(arg use_gps)" type="bool"/>
+        <param name="use_kitti" value="$(arg use_kitti)" type="bool"/>
     </node>
 
     <node pkg="rviz" type="rviz" name="rviz" output="screen" args="-d $(find xchu_mapping)/rviz/mapping.rviz"/>

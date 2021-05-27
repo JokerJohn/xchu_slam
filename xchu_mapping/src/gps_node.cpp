@@ -25,6 +25,28 @@ int main(int argc, char **argv) {
   return 0;
 }
 
+GNSSOdom::GNSSOdom() : nh_("~") {
+  nh_.param<std::string>("imu_topic", imu_topic, "/kitti/oxts/imu");
+  nh_.param<std::string>("gps_topic", gps_topic, "/kitti/oxts/gps/fix");
+  nh_.param<std::string>("world_frame_id", world_frame_id_, "map");
+  nh_.param("use_localmap", use_localmap, false);  // 使用点云地图原点, 否则使用车辆运动的起点作为地图原点
+  nh_.param<std::string>("save_dir_", save_dir_, "/home/xchu/workspace/xchujwu_slam/src/xchu_mapping/pcd/");
+  nh_.param<bool>("use_kitti", use_kitti_, false);
+
+  if (use_kitti_) {
+    T_imu2velo << 9.999976e-01, 7.553071e-04, -2.035826e-03, -8.086759e-01,
+        -7.854027e-04, 9.998898e-01, -1.482298e-02, 3.195559e-01,
+        2.024406e-03, 1.482454e-02, 9.998881e-01, -7.997231e-01,
+        0, 0, 0, 1;
+    pos = T_imu2velo.block<3, 1>(0, 3).matrix();
+    rot = T_imu2velo.block<3, 3>(0, 0).matrix();
+  }
+
+  imu_sub_ = nh_.subscribe(imu_topic, 2000, &GNSSOdom::ImuCB, this);
+  gps_sub_ = nh_.subscribe(gps_topic, 100, &GNSSOdom::GNSSCB, this);
+  gps_odom_pub_ = nh_.advertise<nav_msgs::Odometry>("/gps_odom", 4, false);
+}
+
 void GNSSOdom::Run() {
   while (1) {
     if (!init_xyz) {
@@ -71,8 +93,12 @@ void GNSSOdom::Run() {
       Eigen::Vector3d enu = gtools.ECEF2ENU(ecef);
       //ROS_INFO("GPS ENU XYZ : %f, %f, %f", enu(0), enu(1), enu(2));
 
-      // gps坐标转换到lidar系下 kitti的gps和imu安装在一起，所以对imu和lidar进行标定即可
-      Eigen::Vector3d calib_enu = rot * enu + pos;
+      Eigen::Vector3d calib_enu;
+      if (use_kitti_)
+        // gps坐标转换到lidar系下 kitti的gps和imu安装在一起，所以对imu和lidar进行标定即可
+        calib_enu = rot * enu + pos;
+      else
+        calib_enu = enu;
       //      std::cout << "pose bef and aft: " << enu(0) << ", " << enu(1) << ", " << enu(2) << std::endl;
       //      std::cout << "pose bef and aft: " << calib_enu(0) << ", " << calib_enu(1) << ", " << calib_enu(2) << std::endl;
 
@@ -126,24 +152,6 @@ void GNSSOdom::Run() {
   }
 }
 
-GNSSOdom::GNSSOdom() : nh_("~") {
-  nh_.param<std::string>("imu_topic", imu_topic, "/kitti/oxts/imu");
-  nh_.param<std::string>("gps_topic", gps_topic, "/kitti/oxts/gps/fix");
-  nh_.param<std::string>("world_frame_id", world_frame_id_, "map");
-  nh_.param("use_localmap", use_localmap, false);  // 使用点云地图原点, 否则使用车辆运动的起点作为地图原点
-
-  T_imu2velo << 9.999976e-01, 7.553071e-04, -2.035826e-03, -8.086759e-01,
-      -7.854027e-04, 9.998898e-01, -1.482298e-02, 3.195559e-01,
-      2.024406e-03, 1.482454e-02, 9.998881e-01, -7.997231e-01,
-      0, 0, 0, 1;
-  pos = T_imu2velo.block<3, 1>(0, 3).matrix();
-  rot = T_imu2velo.block<3, 3>(0, 0).matrix();
-
-  imu_sub_ = nh_.subscribe(imu_topic, 2000, &GNSSOdom::ImuCB, this);
-  gps_sub_ = nh_.subscribe(gps_topic, 100, &GNSSOdom::GNSSCB, this);
-  gps_odom_pub_ = nh_.advertise<nav_msgs::Odometry>("/gps_odom", 4, false);
-}
-
 void GNSSOdom::ImuCB(const sensor_msgs::ImuConstPtr &msg) {
   mutex_lock.lock();
   imuBuf.push_back(msg);
@@ -160,6 +168,12 @@ void GNSSOdom::GNSSCB(const sensor_msgs::NavSatFixConstPtr &msg) {
     ROS_INFO("Init Orgin GPS LLA  %f, %f, %f", msg->latitude, msg->longitude, msg->altitude);
     gtools.lla_origin_ << msg->latitude, msg->longitude, msg->altitude;
     init_xyz = true;
+
+    // 保存原点
+    std::ofstream out;
+    out.open(save_dir_ + "map_origin.txt", std::ios::out);
+    out << msg->latitude << " " << msg->longitude << " " << msg->altitude;
+    out.close();
   }
   mutex_lock.lock();
   gpsBuf.push_back(msg);
