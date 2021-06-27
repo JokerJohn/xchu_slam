@@ -228,7 +228,6 @@ class PGO {
    * @param root_idx
    */
   void LoopFindNearKeyframesCloud(pcl::PointCloud<PointT>::Ptr &nearKeyframes,
-                                  const int &key,
                                   const int &submap_size,
                                   const int &root_idx);
 

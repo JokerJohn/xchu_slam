@@ -50,7 +50,11 @@ roslaunch xchu_mapping  xchu_mapping.launch
 rosbag play kitti_2011_10_03_drive_0027_synced.bag --clock
 ```
 
-   3.ctrl+c关闭终端则自动保存地图到xchu_mapping/pcd中。关闭终端会在pcd文件夹中生成tum格式的pose数据odom_tum.txt，可以利用evo工具计算其RPE和APE误差。
+   3.执行以下rosservice命令保存地图到xchu_mapping/pcd中。在pcd文件夹中生成tum格式的pose数据odom_tum.txt，可以利用evo工具计算其RPE和APE误差。
+
+```bash
+rosservice call /save_map
+```
 
 ![image-20210518192942245](README/image-20210518192942245.png)
 

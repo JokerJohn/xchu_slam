@@ -477,8 +477,8 @@ void PGO::ICPRefine() {
       int historyKeyframeSearchNum = 25;
       pcl::PointCloud<PointT>::Ptr cureKeyframeCloud(new pcl::PointCloud<PointT>());
       pcl::PointCloud<PointT>::Ptr targetKeyframeCloud(new pcl::PointCloud<PointT>());
-      LoopFindNearKeyframesCloud(cureKeyframeCloud, _curr_kf_idx, 0, _loop_kf_idx); // use same root of loop kf idx
-      LoopFindNearKeyframesCloud(targetKeyframeCloud, _loop_kf_idx, historyKeyframeSearchNum, _loop_kf_idx);
+      LoopFindNearKeyframesCloud(cureKeyframeCloud, 0, _curr_kf_idx); // use same root of loop kf idx
+      LoopFindNearKeyframesCloud(targetKeyframeCloud, historyKeyframeSearchNum, _loop_kf_idx);
 
       pcl::IterativeClosestPoint<PointT, PointT> icp;
       icp.setMaxCorrespondenceDistance(150); // giseop , use a value can cover 2*historyKeyframeSearchNum range in meter
