@@ -581,7 +581,6 @@ void PGO::ISAM2Update() {
 }
 
 void PGO::LoopFindNearKeyframesCloud(pcl::PointCloud<PointT>::Ptr &nearKeyframes,
-                                     const int &key,
                                      const int &submap_size,
                                      const int &root_idx) {
   // extract and stacking near keyframes (in global coord)
