@@ -17,10 +17,8 @@ inline double deg2rad(double degrees) {
   return degrees * M_PI / 180.0;
 }
 
+/* 下采样的点云网格大小 */
 extern double filter_size = 0.5;
-
-
-
 
 struct Pose6D {
   double x;

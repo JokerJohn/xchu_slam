@@ -17,14 +17,8 @@ int main(int argc, char **argv) {
   ROS_INFO("\033[1;32m---->\033[0m XCHU Filter Node Started.");
 
   CloudFilter filter;
-  std::thread odom_thread(&CloudFilter::Run, &filter);
+  std::thread filter_thread(&CloudFilter::Run, &filter);
 
-  /* ros::Rate rate(200);
-   while (ros::ok()) {
-     filter.Run();
-     ros::spinOnce();
-     rate.sleep();
-   }*/
   ros::spin();
   return 0;
 }

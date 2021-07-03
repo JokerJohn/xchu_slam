@@ -6,20 +6,19 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
-        - /global_map1/Status1
-        - /lidar_odom1/Status1
+        - /global_map1
         - /lidar_odom1/Shape1
         - /lidar_odom1/Covariance1/Position1
         - /lidar_odom1/Covariance1/Orientation1
         - /final_Odom1/Shape1
         - /final_Odom1/Covariance1
+        - /pose_graph1/Status1
         - /pose_graph1/Namespaces1
         - /gps_Odometry1/Shape1
         - /gps_Odometry1/Covariance1
         - /gps_Odometry1/Covariance1/Position1
-        - /pgo_odom1/Shape1
       Splitter Ratio: 0.6029411554336548
-    Tree Height: 733
+    Tree Height: 585
   - Class: rviz/Selection
     Name: Selection
   - Class: rviz/Tool Properties
@@ -50,7 +49,7 @@ Visualization Manager:
       Cell Size: 1
       Class: rviz/Grid
       Color: 160; 160; 164
-      Enabled: false
+      Enabled: true
       Line Style:
         Line Width: 0.029999999329447746
         Value: Lines
@@ -61,9 +60,9 @@ Visualization Manager:
         Y: 0
         Z: 0
       Plane: XY
-      Plane Cell Count: 10
+      Plane Cell Count: 10000
       Reference Frame: <Fixed Frame>
-      Value: false
+      Value: true
     - Alpha: 1
       Class: rviz/RobotModel
       Collision Enabled: false
@@ -74,7 +73,7 @@ Visualization Manager:
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
-        velo_link:
+        PandarXT-32:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -86,24 +85,50 @@ Visualization Manager:
       Value: true
       Visual Enabled: true
     - Class: rviz/TF
-      Enabled: false
+      Enabled: true
       Frame Timeout: 15
       Frames:
         All Enabled: true
+        base_link:
+          Value: true
+        camera_color_left:
+          Value: true
+        camera_color_right:
+          Value: true
+        camera_gray_left:
+          Value: true
+        camera_gray_right:
+          Value: true
+        camera_init:
+          Value: true
+        imu_init:
+          Value: true
+        imu_link:
+          Value: true
+        map:
+          Value: true
+        velo_init:
+          Value: true
+        velo_link:
+          Value: true
+        world:
+          Value: true
       Marker Scale: 5
       Name: TF
       Show Arrows: true
       Show Axes: true
       Show Names: true
       Tree:
-        {}
+        map:
+          velo_link:
+            {}
       Update Interval: 0
-      Value: false
-    - Alpha: 0.10000000149011612
+      Value: true
+    - Alpha: 0.6000000238418579
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 7.3251166343688965
-        Min Value: -3.754460334777832
+        Max Value: 13.299327850341797
+        Min Value: -11.393545150756836
         Value: true
       Axis: Z
       Channel Name: intensity
@@ -122,8 +147,8 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 1
-      Size (m): 0.20000000298023224
-      Style: Flat Squares
+      Size (m): 0.30000001192092896
+      Style: Points
       Topic: /global_map
       Unreliable: true
       Use Fixed Frame: true
@@ -162,8 +187,8 @@ Visualization Manager:
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 4.5417866706848145
-        Min Value: -0.3061966896057129
+        Max Value: 4.524834632873535
+        Min Value: -4.652230262756348
         Value: true
       Axis: Z
       Channel Name: intensity
@@ -181,13 +206,25 @@ Visualization Manager:
       Position Transformer: XYZ
       Queue Size: 10
       Selectable: true
-      Size (Pixels): 3
+      Size (Pixels): 5
       Size (m): 0.10000000149011612
       Style: Points
-      Topic: /filtered_points
+      Topic: /current_points
       Unreliable: true
       Use Fixed Frame: true
       Use rainbow: true
+      Value: true
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /kitti/camera_color_left/image
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Image
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
+      Unreliable: false
       Value: true
     - Alpha: 0.5
       Autocompute Intensity Bounds: true
@@ -253,60 +290,6 @@ Visualization Manager:
       Topic: /laser_odom_to_init
       Unreliable: true
       Value: true
-    - Class: rviz/Image
-      Enabled: false
-      Image Topic: /kitti/camera_color_left/image
-      Max Value: 1
-      Median window: 5
-      Min Value: 0
-      Name: Image
-      Normalize Range: true
-      Queue Size: 2
-      Transport Hint: raw
-      Unreliable: false
-      Value: false
-    - Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds:
-        Max Value: 1.908390760421753
-        Min Value: 0.0004214583314023912
-        Value: true
-      Axis: Z
-      Channel Name: intensity
-      Class: rviz/PointCloud2
-      Color: 255; 255; 255
-      Color Transformer: AxisColor
-      Decay Time: 0
-      Enabled: false
-      Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Max Intensity: 642
-      Min Color: 0; 0; 0
-      Min Intensity: 0
-      Name: keypose
-      Position Transformer: XYZ
-      Queue Size: 10
-      Selectable: true
-      Size (Pixels): 5
-      Size (m): 0.009999999776482582
-      Style: Points
-      Topic: /key_poses
-      Unreliable: false
-      Use Fixed Frame: true
-      Use rainbow: true
-      Value: false
-    - Class: rviz/Image
-      Enabled: false
-      Image Topic: /kitti/camera_color_right/image
-      Max Value: 1
-      Median window: 5
-      Min Value: 0
-      Name: Image
-      Normalize Range: true
-      Queue Size: 2
-      Transport Hint: raw
-      Unreliable: false
-      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -346,40 +329,10 @@ Visualization Manager:
       Axis: Z
       Channel Name: intensity
       Class: rviz/PointCloud2
-      Color: 85; 255; 0
-      Color Transformer: FlatColor
-      Decay Time: 0
-      Enabled: false
-      Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Max Intensity: 0.9900000095367432
-      Min Color: 0; 0; 0
-      Min Intensity: 0
-      Name: PointCloud2
-      Position Transformer: XYZ
-      Queue Size: 10
-      Selectable: true
-      Size (Pixels): 1
-      Size (m): 0.009999999776482582
-      Style: Flat Squares
-      Topic: /kitti/velo/pointcloud
-      Unreliable: false
-      Use Fixed Frame: true
-      Use rainbow: true
-      Value: false
-    - Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds:
-        Max Value: 10
-        Min Value: -10
-        Value: true
-      Axis: Z
-      Channel Name: intensity
-      Class: rviz/PointCloud2
       Color: 255; 0; 0
       Color Transformer: FlatColor
       Decay Time: 0
-      Enabled: false
+      Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 0.5799999833106995
@@ -396,7 +349,7 @@ Visualization Manager:
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
-      Value: false
+      Value: true
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -409,7 +362,7 @@ Visualization Manager:
       Color: 0; 0; 255
       Color Transformer: FlatColor
       Decay Time: 0
-      Enabled: false
+      Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 0.9300000071525574
@@ -426,7 +379,7 @@ Visualization Manager:
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
-      Value: false
+      Value: true
     - Angle Tolerance: 0.10000000149011612
       Class: rviz/Odometry
       Covariance:
@@ -444,7 +397,7 @@ Visualization Manager:
           Scale: 1
           Value: true
         Value: true
-      Enabled: false
+      Enabled: true
       Keep: 10000
       Name: final_Odom
       Position Tolerance: 0.10000000149011612
@@ -460,13 +413,14 @@ Visualization Manager:
         Value: Arrow
       Topic: /final_odom
       Unreliable: true
-      Value: false
+      Value: true
     - Class: rviz/MarkerArray
       Enabled: true
       Marker Topic: /markers
       Name: pose_graph
       Namespaces:
         edges: true
+        loop: true
         nodes: true
       Queue Size: 100
       Value: true
@@ -516,40 +470,6 @@ Visualization Manager:
       Topic: /gps_odom
       Unreliable: true
       Value: true
-    - Angle Tolerance: 0.10000000149011612
-      Class: rviz/Odometry
-      Covariance:
-        Orientation:
-          Alpha: 0.5
-          Color: 255; 255; 127
-          Color Style: Unique
-          Frame: Local
-          Offset: 1
-          Scale: 1
-          Value: true
-        Position:
-          Alpha: 0.30000001192092896
-          Color: 204; 51; 204
-          Scale: 1
-          Value: true
-        Value: true
-      Enabled: true
-      Keep: 200
-      Name: pgo_odom
-      Position Tolerance: 0.10000000149011612
-      Shape:
-        Alpha: 1
-        Axes Length: 1
-        Axes Radius: 0.10000000149011612
-        Color: 5; 21; 224
-        Head Length: 0.30000001192092896
-        Head Radius: 0.20000000298023224
-        Shaft Length: 1
-        Shaft Radius: 0.20000000298023224
-        Value: Arrow
-      Topic: /laser_odom_after_pgo
-      Unreliable: false
-      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -578,25 +498,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 54.249942779541016
+      Distance: 351.278564453125
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 48.36452865600586
-        Y: -20.204843521118164
-        Z: 88.91747283935547
-      Focal Shape Fixed Size: false
+        X: 133.09158325195312
+        Y: -105.31903839111328
+        Z: -0.8325255513191223
+      Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
       Pitch: 1.5697963237762451
-      Target Frame: aft_mapped
+      Target Frame: PandarXT-32
       Value: ThirdPersonFollower (rviz)
-      Yaw: 3.1285884380340576
+      Yaw: 2.0536048412323
     Saved: ~
 Window Geometry:
   Displays:
@@ -606,7 +526,7 @@ Window Geometry:
   Hide Right Dock: true
   Image:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd00000004000000000000015600000360fc020000000dfb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afc0000003d00000360000000c900fffffffa000000010100000002fb0000000c00430061006d0065007200610000000000ffffffff0000000000000000fb000000100044006900730070006c0061007900730100000000000001360000015600fffffffb0000000a0049006d0061006700650000000189000002140000001600fffffffc000002f3000000aa0000000000fffffffaffffffff0100000002fb0000000a0049006d0061006700650000000000ffffffff0000005e00fffffffb0000000a0049006d0061006700650000000000000001a90000005e00fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb000000120049006d006100670065005f0072006100770000000000ffffffff0000000000000000fb0000000c00430061006d006500720061000000024e000001710000000000000000fb000000120049006d00610067006500200052006100770100000421000000160000000000000000000000010000010f00000360fc0200000003fb0000000a00560069006500770073000000003d00000360000000a400fffffffb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000780000000a7fc0100000006fb0000000a0049006d00610067006501000003460000043a0000000000000000fb0000000a0049006d00610067006501000000000000037e0000000000000000fb0000000a0049006d0061006700650100000384000003fc0000000000000000fb0000000a0049006d0061006700650100000000000003d10000000000000000fb0000000a0049006d00610067006501000003d7000003a90000000000000000fb0000000a00560069006500770073030000004e00000080000002e100000197000000030000073d0000005cfc0100000002fb0000000800540069006d006501000000000000073d000002eb00fffffffb0000000800540069006d00650100000000000004500000000000000000000005e10000036000000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd00000004000000000000015600000360fc020000000dfb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afc0000003d000002cc000000c900fffffffa000000010100000002fb0000000c00430061006d0065007200610000000000ffffffff0000000000000000fb000000100044006900730070006c0061007900730100000000000001360000015600fffffffb0000000a0049006d006100670065000000014e000002140000000000000000fc0000030f0000008e000000330100001cfa000000000100000002fb0000000a0049006d0061006700650100000000ffffffff0000005e00fffffffb0000000a0049006d0061006700650100000000000001a90000005e00fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb000000120049006d006100670065005f0072006100770000000000ffffffff0000000000000000fb0000000c00430061006d006500720061000000024e000001710000000000000000fb000000120049006d00610067006500200052006100770100000421000000160000000000000000000000010000010f00000360fc0200000003fb0000000a00560069006500770073000000003d00000360000000a400fffffffb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000780000000a7fc0100000006fb0000000a0049006d00610067006501000003460000043a0000000000000000fb0000000a0049006d00610067006501000000000000037e0000000000000000fb0000000a0049006d0061006700650100000384000003fc0000000000000000fb0000000a0049006d0061006700650100000000000003d10000000000000000fb0000000a0049006d00610067006501000003d7000003a90000000000000000fb0000000a00560069006500770073030000004e00000080000002e100000197000000030000073d0000005cfc0100000002fb0000000800540069006d006501000000000000073d000002eb00fffffffb0000000800540069006d00650100000000000004500000000000000000000005e10000036000000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Time:

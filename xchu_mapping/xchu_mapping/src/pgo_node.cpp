@@ -14,16 +14,6 @@ int main(int argc, char **argv) {
   std::thread visualize_map(&PGO::MapVisualization, &pgo);
   std::thread mapping(&PGO::Run, &pgo);
 
-  /*ros::Rate rate(200);
-  while (ros::ok()) {
-    pgo.Run();
-    ros::spinOnce();
-    rate.sleep();
-  }
-  loop_detection.join();
-  icp_calculation.join();
-  visualize_map.join();*/
-
   ros::spin();
   return 0;
 }
@@ -59,6 +49,7 @@ void PGO::InitParams() {
   nh.param<bool>("use_kitti", use_kitti_, false);
   nh.param<std::string>("lidar_frame_id", lidar_frame_id_, "velo_link");
   nh.param<std::string>("world_frame_id", world_frame_id_, "map");
+  nh.param<double>("key_frame_gap", keyframeMeterGap, 0.5);
 
   if (use_kitti_) {
     velo2camera.setIdentity();
@@ -68,14 +59,9 @@ void PGO::InitParams() {
         0, 0, 0, 1;
   }
 
-  //  std::cout << "topic: " << odom_topic_ << "," << cloud_topic_ << std::endl;
-  // 每隔2m选取关键帧
-  keyframeMeterGap = 1.5;
-
   // scan contetx的阈值和参数配置
   scDistThres = 0.2;
   scManager.setSCdistThres(scDistThres);
-
   // intensity scan context参数配置
   int sector_width = 60;
   int ring_height = 60;
@@ -94,6 +80,7 @@ void PGO::InitParams() {
   downSizeFilterICP.setLeafSize(filter_size, filter_size, filter_size);
   downSizePublishCloud.setLeafSize(filter_size, filter_size, filter_size);
   downSizeFilterMapPGO.setLeafSize(filter_size, filter_size, filter_size);
+  //downSizeFilterMapPGO.setLeafSize(0.1, 0.1, 0.1);
 
   // gtsam params
   ISAM2Params parameters;
@@ -112,7 +99,7 @@ void PGO::InitParams() {
   odomNoise = noiseModel::Diagonal::Variances(odomNoiseVector6);
 
   // loop factor noise
-  double loopNoiseScore = 0.3;
+  double loopNoiseScore = 0.5;
   gtsam::Vector robustNoiseVector6(6);
   robustNoiseVector6 << loopNoiseScore, loopNoiseScore, loopNoiseScore, loopNoiseScore, loopNoiseScore, loopNoiseScore;
   robustLoopNoise = gtsam::noiseModel::Robust::Create(
@@ -120,11 +107,11 @@ void PGO::InitParams() {
       gtsam::noiseModel::Diagonal::Variances(robustNoiseVector6));
 
   // gps factor noise
-  double bigNoiseTolerentToXY = 1000000000.0; // 1e9
-  double gpsAltitudeNoiseScore = 250.0; // if height is misaligned after loop closing, use this value bigger
-  gtsam::Vector robustNoiseVector3(3); // gps factor has 3 elements (xyz)
+  double bigNoiseTolerentToXY = 1000000000.0;
+  double gpsAltitudeNoiseScore = 250.0;
+  gtsam::Vector robustNoiseVector3(3);
   robustNoiseVector3
-      << bigNoiseTolerentToXY, bigNoiseTolerentToXY, gpsAltitudeNoiseScore; // means only caring altitude here. (because LOAM-like-methods tends to be asymptotically flyging)
+      << bigNoiseTolerentToXY, bigNoiseTolerentToXY, gpsAltitudeNoiseScore;
   robustGPSNoise = gtsam::noiseModel::Robust::Create(
       gtsam::noiseModel::mEstimator::Cauchy::Create(1), // optional: replacing Cauchy by DCS or GemanMcClure is okay but Cauchy is empirically good.
       gtsam::noiseModel::Diagonal::Variances(robustNoiseVector3));
@@ -189,7 +176,7 @@ void PGO::Run() {
       while (!gps_queue_.empty()) {
         auto time4 = gps_queue_.front()->header.stamp.toSec();
         curr_gps_ = gps_queue_.front();
-        //ROS_WARN("GNSS DIFF:%f", time4 - curr_odom_time_);
+        ROS_WARN("GNSS DIFF:%f", time4 - curr_odom_time_);
         if (abs(time4 - curr_odom_time_) < 0.2) {
           //ROS_WARN("use gps");
           hasGPSforThisKF = true;
@@ -283,7 +270,7 @@ void PGO::Run() {
                                                             curr_node_idx,
                                                             poseFrom.between(poseTo),
                                                             odomNoise));
-          ROS_WARN("odom factor added at node %d ", curr_node_idx);
+          // ROS_WARN("odom factor added at node %d ", curr_node_idx);
           if (hasGPSforThisKF) {
             // 里程计位姿协方差较大时候加入
             //            if (pose_covariance_curr(3, 3) < pose_cov_thre && pose_covariance_curr(4, 4) < pose_cov_thre)
@@ -440,7 +427,7 @@ void PGO::PerformSCLoopClosure() {
 }
 
 void PGO::LoopClosure() {
-  ros::Rate rate(2.0);
+  ros::Rate rate(1.0);
   while (1) {
     rate.sleep();
     PerformSCLoopClosure();
@@ -477,7 +464,7 @@ void PGO::ICPRefine() {
       int historyKeyframeSearchNum = 25;
       pcl::PointCloud<PointT>::Ptr cureKeyframeCloud(new pcl::PointCloud<PointT>());
       pcl::PointCloud<PointT>::Ptr targetKeyframeCloud(new pcl::PointCloud<PointT>());
-      LoopFindNearKeyframesCloud(cureKeyframeCloud, 0, _curr_kf_idx); // use same root of loop kf idx
+      LoopFindNearKeyframesCloud(cureKeyframeCloud, 0, _loop_kf_idx); // use same root of loop kf idx
       LoopFindNearKeyframesCloud(targetKeyframeCloud, historyKeyframeSearchNum, _loop_kf_idx);
 
       pcl::IterativeClosestPoint<PointT, PointT> icp;

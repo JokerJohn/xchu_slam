@@ -14,13 +14,6 @@ int main(int argc, char **argv) {
   GNSSOdom gps_node;
   std::thread gps_thread(&GNSSOdom::Run, &gps_node);
 
-/*  ros::Rate loop_rate(100);
-  while (ros::ok()) {
-    ros::spinOnce();
-    loop_rate.sleep();
-    gps_node.run();
-  }*/
-
   ros::spin();
   return 0;
 }
@@ -34,6 +27,7 @@ GNSSOdom::GNSSOdom() : nh_("~") {
   nh_.param<bool>("use_kitti", use_kitti_, false);
 
   if (use_kitti_) {
+    // kitti的imu到雷达的标定结果
     T_imu2velo << 9.999976e-01, 7.553071e-04, -2.035826e-03, -8.086759e-01,
         -7.854027e-04, 9.998898e-01, -1.482298e-02, 3.195559e-01,
         2.024406e-03, 1.482454e-02, 9.998881e-01, -7.997231e-01,
@@ -53,7 +47,7 @@ void GNSSOdom::Run() {
       //ROS_WARN("PLease init lla first!!!");
       continue;
     }
-    while (!gpsBuf.empty() && !imuBuf.empty()) {
+    while (!gpsBuf.empty() /*&& !imuBuf.empty()*/) {
       ros::Time gps_stamp = gpsBuf.front()->header.stamp;
       bool imu_type = false;
       auto imu_iter = imuBuf.begin();
@@ -82,7 +76,7 @@ void GNSSOdom::Run() {
       double gps_time = gps_msg->header.stamp.toSec();
       double off_time = gps_time - imu_time;
       if (off_time < 0.1 && off_time > -0.1) {
-        //ROS_WARN("off set time: %f ", off_time);
+        ROS_WARN("off set time: %f ", off_time);
       } else {
         ROS_ERROR("Time aligned failed....");
       }
